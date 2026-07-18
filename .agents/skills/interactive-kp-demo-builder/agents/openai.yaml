@@ -1,0 +1,4 @@
+interface:
+  display_name: "Interactive KP Demo Builder"
+  short_description: "Создаёт интерактивные инструкции для КП"
+  default_prompt: "Use -kp-demo-builder to capture and publish an Interactive KP product demo."

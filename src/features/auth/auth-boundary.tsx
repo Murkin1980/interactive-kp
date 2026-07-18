@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 export function AuthBoundary({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isPublic = pathname === "/login" || pathname.startsWith("/public/") || pathname.startsWith("/auth/");
+  const isPublic = pathname === "/login" || pathname.startsWith("/public/") || pathname.startsWith("/auth/") || pathname.startsWith("/demo");
   const [authenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {

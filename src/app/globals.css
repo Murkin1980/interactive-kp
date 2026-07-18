@@ -24,6 +24,11 @@ body {
   font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
 }
 
+.demo-shell{background:#efe9dc;background-image:radial-gradient(rgba(20,38,61,.08) .7px,transparent .8px),linear-gradient(115deg,rgba(194,164,109,.08),transparent 35%);background-size:5px 5px,100% 100%;font-family:Arial,Helvetica,sans-serif}
+.demo-hotspot{animation:demo-pulse 1.8s ease-in-out infinite}
+@keyframes demo-pulse{0%,100%{box-shadow:0 0 0 0 rgba(194,164,109,.75)}50%{box-shadow:0 0 0 14px rgba(194,164,109,0)}}
+@media(prefers-reduced-motion:reduce){.demo-hotspot{animation:none}}
+
 .proposal-canvas{position:relative;background:#f3efe4;background-image:radial-gradient(rgba(20,38,61,.07) .55px,transparent .7px);background-size:4px 4px;font-family:Georgia,"Times New Roman",serif;color:#14263d}
 .proposal-canvas:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.32;background:linear-gradient(100deg,transparent 0 48%,rgba(194,164,109,.07) 50%,transparent 52%),radial-gradient(circle at 8% 28%,rgba(64,35,58,.1),transparent 22%)}
 .proposal-canvas>header{background:#14263d;color:#f3efe4;border-color:rgba(194,164,109,.35)}
