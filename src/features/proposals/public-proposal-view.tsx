@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Kp, KpItem, KpItemVariant, KpOptionGroup } from "@/types";
 import type { jsPDF as JsPdf } from "jspdf";
+import ProposalExperience from "@/features/proposals/proposal-experience";
 
 type PublicItem = KpItem & { variants: KpItemVariant[]; option_groups: KpOptionGroup[] };
 
@@ -415,6 +416,30 @@ export default function PublicProposalView() {
   }
 
   if (!proposal) return null;
+
+  const editorialExperienceEnabled = true;
+  if (editorialExperienceEnabled) {
+    return <ProposalExperience
+      proposal={proposal}
+      selectedVariants={selectedVariants}
+      selectedOptions={selectedOptions}
+      calculation={calculation}
+      confirmed={confirmed}
+      expired={expired}
+      consent={consent}
+      formData={formData}
+      confirming={confirming}
+      pdfBusy={pdfBusy}
+      submitError={submitError}
+      onVariantChange={handleVariantChange}
+      onOptionChange={handleOptionChange}
+      onConsentChange={setConsent}
+      onFormChange={setFormData}
+      onConfirm={handleConfirm}
+      onDownloadPdf={() => void handleDownloadStoredPdf()}
+      onGeneratePdf={() => void handleGenerateMissingPdf()}
+    />;
+  }
 
   return (
     <div className="min-h-screen bg-stone-100 px-4 py-8">

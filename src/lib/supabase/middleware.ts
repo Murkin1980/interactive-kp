@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   // Public pages never need a server-side auth round-trip. Keeping this branch
   // dependency-free also makes secret client links resilient at the edge.
-  const publicPaths = ["/public", "/login"];
+  const publicPaths = ["/public", "/login", "/auth/callback"];
   const isPublicPath = publicPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
