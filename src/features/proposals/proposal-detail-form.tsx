@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -242,7 +243,11 @@ export default function ProposalDetailForm() {
     const text = encodeURIComponent(
       `Коммерческое предложение «${kp.project_name}»\n\nПросмотреть: ${url}`
     );
-    window.open(`https://wa.me/?${kp.client_phone ? `phone=${kp.client_phone}&` : ""}text=${text}`, "_blank");
+    const phone = kp.client_phone?.replace(/\D/g, "") || "";
+    const whatsappUrl = phone
+      ? `https://wa.me/${phone}?text=${text}`
+      : `https://wa.me/?text=${text}`;
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   };
 
   const calculation = calculateKp(
@@ -551,7 +556,7 @@ export default function ProposalDetailForm() {
               <p className="mb-2 text-sm font-medium text-stone-600">
                 Публичная ссылка
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   readOnly
                   value={getPublicUrl()}
@@ -560,11 +565,14 @@ export default function ProposalDetailForm() {
                 <Button type="button" variant="secondary" onClick={handleCopyLink}>
                   {copySuccess ? "Скопировано!" : "Копировать"}
                 </Button>
+                <Button type="button" variant="secondary" className="gap-2 transition-colors hover:bg-amber-100" onClick={() => window.open(getPublicUrl(), "_blank", "noopener,noreferrer")}>
+                  <ExternalLink size={16} /> Открыть как клиент
+                </Button>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Button type="button" variant="secondary" onClick={handleShareWhatsApp}>
+              <Button type="button" onClick={handleShareWhatsApp} className="bg-[#25D366] text-white transition-colors hover:bg-[#1ebe5d]">
                 Отправить в WhatsApp
               </Button>
               {kp.status === "draft" && !isReadOnly && (
