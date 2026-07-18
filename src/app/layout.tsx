@@ -1,4 +1,5 @@
 import "./globals.css";
+import { AuthBoundary } from "@/features/auth/auth-boundary";
 
 export default function RootLayout({
   children,
@@ -7,7 +8,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased"><AuthBoundary>{children}</AuthBoundary></body>
     </html>
   );
 }
