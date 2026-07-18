@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { calculateKp } from "@/lib/utils/calculation";
 import ItemManager from "./item-manager";
-import type { Kp, KpItem, KpItemVariant } from "@/types";
+import type { Kp, KpApprovalSnapshot, KpItem, KpItemVariant } from "@/types";
 
 export default function ProposalDetailForm() {
   const params = useParams();
@@ -22,6 +22,7 @@ export default function ProposalDetailForm() {
   const [kp, setKp] = useState<Kp | null>(null);
   const [items, setItems] = useState<(KpItem & { variants: KpItemVariant[] })[]>([]);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  const [snapshots, setSnapshots] = useState<KpApprovalSnapshot[]>([]);
   const [formData, setFormData] = useState({
     client_name: "",
     client_phone: "",
@@ -38,6 +39,7 @@ export default function ProposalDetailForm() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [reopenArmed, setReopenArmed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +89,9 @@ export default function ProposalDetailForm() {
         }
         setSelectedVariants(defaultSelections);
       }
+
+      const { data: snapshotData } = await supabase.from("kp_approval_snapshots").select("*").eq("kp_id", id).order("version", { ascending: false });
+      if (!cancelled && snapshotData) setSnapshots(snapshotData as KpApprovalSnapshot[]);
 
       if (!cancelled) {
         setLoading(false);
@@ -179,6 +184,32 @@ export default function ProposalDetailForm() {
     }
 
     router.push(`/proposals/${newKpId}`);
+  };
+
+  const handleReopenRevision = async () => {
+    if (!kp || kp.status !== "confirmed") return;
+    if (!reopenArmed) {
+      setReopenArmed(true);
+      return;
+    }
+    setErrors({});
+    const { data, error } = await supabase.rpc("reopen_kp_for_revision", { p_kp_id: kp.id });
+    if (error) {
+      setErrors({ root: "Не удалось создать новую редакцию: " + error.message });
+      return;
+    }
+    const revision = (data as { revision?: number } | null)?.revision ?? kp.current_revision + 1;
+    setKp({ ...kp, status: "sent", current_revision: revision, confirmed_at: null, selected_total: null });
+    router.refresh();
+  };
+
+  const handleDownloadPdf = async (snapshot: KpApprovalSnapshot) => {
+    if (!snapshot.pdf_storage_path) return;
+    const { data, error } = await supabase.storage.from("kp-media").download(snapshot.pdf_storage_path);
+    if (error) { setErrors({ root: "Не удалось скачать PDF: " + error.message }); return; }
+    const url = URL.createObjectURL(data); const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = `${kp?.number || "KP"}-v${snapshot.version}.pdf`; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const getPublicUrl = () => {
@@ -544,10 +575,16 @@ export default function ProposalDetailForm() {
               <Button type="button" variant="secondary" onClick={handleDuplicate}>
                 Дублировать
               </Button>
+              {kp.status === "confirmed" && (
+                <Button type="button" onClick={handleReopenRevision}>
+                  {reopenArmed ? "Подтвердить разблокировку" : "Создать новую редакцию"}
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
       </Card>
+      {snapshots.length > 0 && <Card><CardHeader><h2 className="text-lg font-semibold text-stone-800">История согласованных смет</h2></CardHeader><CardContent><div className="space-y-3">{snapshots.map((snapshot) => <div key={snapshot.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stone-200 p-4"><div><b className="text-stone-800">Редакция {snapshot.version}</b><p className="text-xs text-stone-500">{new Date(snapshot.confirmed_at).toLocaleString("ru-RU")} · {formatCurrency(snapshot.total)}</p></div>{snapshot.pdf_storage_path ? <Button type="button" variant="secondary" onClick={() => void handleDownloadPdf(snapshot)}>Скачать PDF</Button> : <span className="text-xs text-amber-700">PDF ещё не сформирован</span>}</div>)}</div></CardContent></Card>}
     </div>
   );
 }

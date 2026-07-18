@@ -30,6 +30,7 @@ export interface Kp {
   public_token: string;
   confirmed_at: string | null;
   selected_total: number | null;
+  current_revision: number;
 }
 
 export interface KpItem {
@@ -41,6 +42,33 @@ export interface KpItem {
   quantity: number;
   image_url: string | null;
   sort_order: number;
+  item_type: string;
+  original_image_url: string | null;
+  sketch_image_url: string | null;
+}
+
+export interface KpOptionValue {
+  id: string;
+  group_id: string;
+  name: string;
+  brand: string | null;
+  description: string | null;
+  image_url: string | null;
+  price_delta: number;
+  production_days_delta: number;
+  is_default: boolean;
+  sort_order: number;
+}
+
+export interface KpOptionGroup {
+  id: string;
+  item_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  is_required: boolean;
+  sort_order: number;
+  values: KpOptionValue[];
 }
 
 export interface KpItemVariant {
@@ -64,6 +92,20 @@ export interface KpConfirmation {
   selected_variants: Record<string, string>;
   selected_total: number;
   confirmed_at: string;
+  revision: number;
+}
+
+export interface KpApprovalSnapshot {
+  id: string;
+  kp_id: string;
+  version: number;
+  snapshot: Record<string, unknown>;
+  total: number;
+  advance: number;
+  balance: number;
+  confirmed_at: string;
+  pdf_storage_path: string | null;
+  pdf_generated_at: string | null;
 }
 
 export interface KpWithItems extends Kp {

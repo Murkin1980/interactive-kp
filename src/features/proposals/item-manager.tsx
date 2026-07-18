@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import OptionManager from "./option-manager";
 
 interface ItemManagerProps {
   kpId: string;
@@ -896,6 +897,7 @@ export default function ItemManager({
                   </Button>
                 </div>
               )}
+              {!isEditing && <OptionManager itemId={item.id} readOnly={readOnly} />}
             </CardContent>
           </Card>
         );

@@ -8,16 +8,29 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Kp, KpItem, KpItemVariant } from "@/types";
+import type { Kp, KpItem, KpItemVariant, KpOptionGroup } from "@/types";
+import type { jsPDF as JsPdf } from "jspdf";
+
+type PublicItem = KpItem & { variants: KpItemVariant[]; option_groups: KpOptionGroup[] };
 
 type KpWithVariants = Kp & {
-  items: (KpItem & { variants: KpItemVariant[] })[];
+  items: PublicItem[];
+  approval?: { version: number; snapshot: Record<string, unknown>; pdf_storage_path: string | null } | null;
 };
 
 type PublicKpData = Omit<Kp, "client_id" | "public_token" | "owner_id"> & {
-  items: (KpItem & { variants: KpItemVariant[] })[];
+  items: PublicItem[];
   is_expired?: boolean;
   selected_variants?: Record<string, string>;
+  approval?: { version: number; snapshot: Record<string, unknown>; pdf_storage_path: string | null } | null;
+};
+
+type ApprovalSnapshotData = {
+  items?: Array<{
+    item_id?: string;
+    variant?: { id?: string };
+    options?: Array<{ group_id?: string; value_id?: string }>;
+  }>;
 };
 
 export default function PublicProposalView() {
@@ -29,6 +42,8 @@ export default function PublicProposalView() {
   const [selectedVariants, setSelectedVariants] = useState<
     Record<string, string>
   >({});
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  const [consent, setConsent] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [expired, setExpired] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -37,6 +52,7 @@ export default function PublicProposalView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const [formData, setFormData] = useState({
     client_name: "",
@@ -93,9 +109,7 @@ export default function PublicProposalView() {
         }
 
         // Build typed items with variants
-        const typedItems = (kpData.items ?? []) as (KpItem & {
-          variants: KpItemVariant[];
-        })[];
+        const typedItems = (kpData.items ?? []) as PublicItem[];
 
         // For confirmed KPs, try to restore previously selected variants
         let initialVariants: Record<string, string> = {};
@@ -142,6 +156,28 @@ export default function PublicProposalView() {
           }
         }
 
+        const initialOptions: Record<string, string> = {};
+        for (const item of typedItems) {
+          for (const group of item.option_groups ?? []) {
+            const defaultValue = group.values.find((value) => value.is_default) ?? group.values[0];
+            if (defaultValue) initialOptions[group.id] = defaultValue.id;
+          }
+        }
+
+        // A confirmed proposal must always render and regenerate its immutable
+        // approved configuration, never today's defaults.
+        if (kpData.status === "confirmed" && kpData.approval?.snapshot) {
+          const approved = kpData.approval.snapshot as ApprovalSnapshotData;
+          for (const approvedItem of approved.items ?? []) {
+            if (approvedItem.item_id && approvedItem.variant?.id) {
+              initialVariants[approvedItem.item_id] = approvedItem.variant.id;
+            }
+            for (const option of approvedItem.options ?? []) {
+              if (option.group_id && option.value_id) initialOptions[option.group_id] = option.value_id;
+            }
+          }
+        }
+
         if (!cancelled) {
           setProposal({
             ...kpData,
@@ -151,6 +187,7 @@ export default function PublicProposalView() {
             owner_id: "",
           } as KpWithVariants);
           setSelectedVariants(initialVariants);
+          setSelectedOptions(initialOptions);
           setLoading(false);
         }
       }
@@ -162,12 +199,17 @@ export default function PublicProposalView() {
 
   // Client-side calculation for display (server recalculates on confirm)
   const calculation = proposal
-    ? calculateClientSide(proposal, selectedVariants)
+    ? calculateClientSide(proposal, selectedVariants, selectedOptions)
     : null;
 
   const handleVariantChange = (itemId: string, variantId: string) => {
     if (confirmed || expired) return;
     setSelectedVariants((prev) => ({ ...prev, [itemId]: variantId }));
+  };
+
+  const handleOptionChange = (groupId: string, valueId: string) => {
+    if (confirmed || expired) return;
+    setSelectedOptions((previous) => ({ ...previous, [groupId]: valueId }));
   };
 
   const handleConfirm = async (e: React.FormEvent) => {
@@ -182,16 +224,29 @@ export default function PublicProposalView() {
       setSubmitError("Выберите вариант в каждой позиции");
       return;
     }
+    const allRequiredOptionsSelected = proposal.items.every((item) =>
+      (item.option_groups ?? []).every((group) => !group.is_required || selectedOptions[group.id])
+    );
+    if (!allRequiredOptionsSelected) {
+      setSubmitError("Выберите значение в каждой обязательной группе");
+      return;
+    }
+    if (!consent) {
+      setSubmitError("Подтвердите согласие с окончательной сметой");
+      return;
+    }
 
     setConfirming(true);
     setSubmitError(null);
 
-    const { data, error } = await supabase.rpc("confirm_public_kp", {
+    const { data, error } = await supabase.rpc("approve_public_kp", {
       p_token: token,
       p_client_name: formData.client_name || null,
       p_client_phone: formData.client_phone || null,
       p_comment: formData.comment || null,
       p_selected_variants: selectedVariants,
+      p_selected_options: selectedOptions,
+      p_consent: consent,
     });
 
     if (error) {
@@ -204,16 +259,82 @@ export default function PublicProposalView() {
       success: boolean;
       already_confirmed?: boolean;
       confirmed_at?: string;
-      selected_total?: number;
+      total?: number;
+      revision?: number;
+      snapshot?: Record<string, unknown>;
     };
 
     if (result?.success) {
+      if (!result.already_confirmed && result.revision) {
+        try {
+          await generateAndStorePdf(result.revision);
+        } catch (pdfError) {
+          console.error("[PDF]", pdfError);
+          setSubmitError("Смета подтверждена, но PDF не удалось сохранить. Менеджер сможет повторить формирование.");
+        }
+      }
       setConfirmed(true);
     } else {
       setSubmitError("Неожиданный ответ сервера");
     }
 
     setConfirming(false);
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const generateAndStorePdf = async (revision: number) => {
+    if (!proposal || !calculation) return;
+    setPdfBusy(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const [regularFont, boldFont] = await Promise.all([
+        fetch("/fonts/NotoSans-Regular.ttf").then((response) => response.arrayBuffer()),
+        fetch("/fonts/NotoSans-Bold.ttf").then((response) => response.arrayBuffer()),
+      ]);
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+      pdf.addFileToVFS("NotoSans-Regular.ttf", arrayBufferToBase64(regularFont));
+      pdf.addFileToVFS("NotoSans-Bold.ttf", arrayBufferToBase64(boldFont));
+      pdf.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
+      pdf.addFont("NotoSans-Bold.ttf", "NotoSans", "bold");
+      renderEstimatePdf(pdf, proposal, selectedVariants, selectedOptions, calculation, revision);
+      const blob = pdf.output("blob");
+      const path = `${proposal.id}/${token}/approval-v${revision}.pdf`;
+      const { error: uploadError } = await supabase.storage.from("kp-media").upload(path, blob, { contentType: "application/pdf", upsert: false });
+      if (uploadError && !uploadError.message.toLowerCase().includes("already exists")) throw uploadError;
+      const { error: attachError } = await supabase.rpc("attach_approval_pdf", { p_token: token, p_revision: revision, p_storage_path: path });
+      if (attachError && !attachError.message.toLowerCase().includes("already attached")) throw attachError;
+      setProposal((current) => current ? { ...current, approval: { version: revision, snapshot: {}, pdf_storage_path: path } } : current);
+      downloadBlob(blob, `${proposal.number || "KP"}-v${revision}.pdf`);
+    } finally { setPdfBusy(false); }
+  };
+
+  const handleDownloadStoredPdf = async () => {
+    const path = proposal?.approval?.pdf_storage_path;
+    if (!proposal || !path) return;
+    setPdfBusy(true);
+    const { data, error } = await supabase.storage.from("kp-media").download(path);
+    setPdfBusy(false);
+    if (error) { setSubmitError("Не удалось скачать PDF: " + error.message); return; }
+    downloadBlob(data, `${proposal.number || "KP"}-v${proposal.approval?.version ?? 1}.pdf`);
+  };
+
+  const handleGenerateMissingPdf = async () => {
+    if (!proposal) return;
+    setSubmitError("");
+    try {
+      await generateAndStorePdf(proposal.current_revision);
+    } catch (error) {
+      console.error("[PDF]", error);
+      setSubmitError("Не удалось сформировать PDF. Попробуйте ещё раз или обратитесь к менеджеру.");
+    }
   };
 
   if (loading) {
@@ -425,6 +546,26 @@ export default function PublicProposalView() {
                     ))}
                   </div>
 
+                  {(item.option_groups ?? []).map((group) => (
+                    <fieldset key={group.id} className="space-y-2 border-t border-stone-200 pt-3">
+                      <legend className="mb-2 flex w-full items-center justify-between text-sm font-semibold text-stone-700">
+                        <span>{group.name}</span>
+                        {group.is_required && <span className="text-xs font-normal text-amber-700">Обязательный выбор</span>}
+                      </legend>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {group.values.map((value) => (
+                          <label key={value.id} className={`cursor-pointer rounded-lg border p-3 transition-colors ${selectedOptions[group.id] === value.id ? "border-amber-500 bg-amber-50" : "border-stone-200 bg-white hover:bg-stone-50"} ${confirmed || expired ? "pointer-events-none opacity-70" : ""}`}>
+                            <span className="flex items-start gap-2">
+                              <input type="radio" name={`group-${group.id}`} checked={selectedOptions[group.id] === value.id} onChange={() => handleOptionChange(group.id, value.id)} disabled={confirmed || expired} className="mt-0.5 h-4 w-4 text-amber-600" />
+                              <span className="flex-1"><b className="block text-sm text-stone-800">{value.name}</b>{value.brand && <small className="text-stone-500">{value.brand}</small>}</span>
+                              <b className="text-xs text-amber-700">{value.price_delta > 0 ? `+${formatCurrency(value.price_delta)}` : "Включено"}</b>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ))}
+
                   {selectedVariants[item.id] && (
                     <div className="flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2 text-sm">
                       <span className="text-stone-500">
@@ -548,6 +689,10 @@ export default function PublicProposalView() {
                   }
                   placeholder="Пожелания, вопросы, замечания..."
                 />
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                  <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 h-4 w-4 accent-amber-600" />
+                  <span className="text-sm leading-6 text-stone-700">Я проверил выбранную комплектацию и согласен с окончательной сметой на сумму <b>{calculation ? formatCurrency(calculation.total) : ""}</b>.</span>
+                </label>
                 {submitError && (
                   <p className="text-sm text-red-600">{submitError}</p>
                 )}
@@ -559,7 +704,7 @@ export default function PublicProposalView() {
                 >
                   {confirming
                     ? "Отправка..."
-                    : `Подтвердить — ${calculation ? formatCurrency(calculation.total) : ""}`}
+                    : `Согласовать и сформировать PDF — ${calculation ? formatCurrency(calculation.total) : ""}`}
                 </Button>
               </form>
             </CardContent>
@@ -588,6 +733,17 @@ export default function PublicProposalView() {
                     </p>
                   </div>
                 )}
+                {confirmed && proposal.approval?.pdf_storage_path && (
+                  <Button type="button" className="mt-4" disabled={pdfBusy} onClick={() => void handleDownloadStoredPdf()}>
+                    {pdfBusy ? "Подготовка PDF..." : "Скачать финальное КП (PDF)"}
+                  </Button>
+                )}
+                {confirmed && !proposal.approval?.pdf_storage_path && (
+                  <Button type="button" className="mt-4" disabled={pdfBusy} onClick={() => void handleGenerateMissingPdf()}>
+                    {pdfBusy ? "Подготовка PDF..." : "Сформировать финальное КП (PDF)"}
+                  </Button>
+                )}
+                {submitError && <p className="mt-3 text-sm text-red-600">{submitError}</p>}
               </div>
             </CardContent>
           </Card>
@@ -601,10 +757,33 @@ export default function PublicProposalView() {
   );
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer); let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  return btoa(binary);
+}
+
+function renderEstimatePdf(pdf: JsPdf, proposal: KpWithVariants, selectedVariants: Record<string,string>, selectedOptions: Record<string,string>, calculation: {subtotal:number;discountAmount:number;total:number;advance:number;balance:number}, revision: number) {
+  const left=16, right=194, pageBottom=278; let y=18;
+  const text=(value:string,x:number,size=10,style:"normal"|"bold"="normal",color:[number,number,number]=[35,35,31])=>{pdf.setFont("NotoSans",style);pdf.setFontSize(size);pdf.setTextColor(...color);pdf.text(value,x,y);};
+  const line=()=>{pdf.setDrawColor(205,198,184);pdf.line(left,y,right,y);y+=5;};
+  const space=(needed:number)=>{if(y+needed>pageBottom){pdf.addPage();y=18;}};
+  text("ГРАНД МЕБЕЛЬ",left,9,"bold",[155,104,69]); text("ФИНАЛЬНАЯ СМЕТА",140,9,"normal",[90,87,80]); y+=10;
+  text(proposal.project_name,left,20,"bold"); y+=9; text(`${proposal.number} · редакция ${revision}`,left,9); text(proposal.client_name,140,9,"bold"); y+=8; line();
+  proposal.items.forEach((item,index)=>{space(40);const variant=item.variants.find(v=>v.id===selectedVariants[item.id]);const options=(item.option_groups??[]).map(group=>({group,value:group.values.find(v=>v.id===selectedOptions[group.id])})).filter(entry=>entry.value);const itemTotal=((variant?.price??0)+options.reduce((sum,e)=>sum+(e.value?.price_delta??0),0))*item.quantity;
+    text(`${index+1}. ${item.name}`,left,13,"bold"); text(formatCurrency(itemTotal),158,11,"bold"); y+=7;text(`${item.dimensions||"Размер по проекту"} · ${item.quantity} шт.`,left,8,"normal",[115,111,104]);y+=7;
+    text("Исполнение",left,8,"normal",[115,111,104]);text(`${variant?.name||""}${variant?.material?` · ${variant.material}`:""}`,65,9);text(formatCurrency((variant?.price??0)*item.quantity),158,9,"bold");y+=6;
+    options.forEach(({group,value})=>{space(7);text(group.name,left,8,"normal",[115,111,104]);text(`${value?.name||""}${value?.brand?` · ${value.brand}`:""}`,65,9);text(value&&value.price_delta>0?`+${formatCurrency(value.price_delta*item.quantity)}`:"включено",158,9,"bold");y+=6;});y+=3;line();
+  });
+  space(55);y+=3;text("Сумма",105,9);text(formatCurrency(calculation.subtotal),158,9,"bold");y+=7;if(calculation.discountAmount>0){text("Скидка",105,9);text(`-${formatCurrency(calculation.discountAmount)}`,158,9,"bold",[30,120,70]);y+=7;}pdf.setDrawColor(35,35,31);pdf.line(105,y,194,y);y+=7;text("ИТОГО",105,12,"bold");text(formatCurrency(calculation.total),158,12,"bold");y+=8;text(`Аванс ${proposal.advance_percent}%`,105,9);text(formatCurrency(calculation.advance),158,9,"bold");y+=7;text("Остаток",105,9);text(formatCurrency(calculation.balance),158,9,"bold");y+=13;
+  space(35);pdf.setFillColor(248,246,240);pdf.rect(left,y,right-left,23,"F");y+=7;const consent=pdf.splitTextToSize("Клиент проверил выбранную комплектацию и согласился с окончательной сметой.",165);pdf.setFont("NotoSans","normal");pdf.setFontSize(8);pdf.text(consent,left+4,y);y+=20;text(`Дата формирования: ${new Date().toLocaleString("ru-RU")}`,left,7,"normal",[115,111,104]);
+}
+
 // Client-side calculation for display purposes
 function calculateClientSide(
   proposal: KpWithVariants,
-  selectedVariants: Record<string, string>
+  selectedVariants: Record<string, string>,
+  selectedOptions: Record<string, string>
 ) {
   let subtotal = 0;
 
@@ -613,6 +792,10 @@ function calculateClientSide(
     const variant = item.variants.find((v) => v.id === selectedVariantId);
     if (variant) {
       subtotal += variant.price * item.quantity;
+    }
+    for (const group of item.option_groups ?? []) {
+      const value = group.values.find((candidate) => candidate.id === selectedOptions[group.id]);
+      if (value) subtotal += value.price_delta * item.quantity;
     }
   }
 
