@@ -16,6 +16,7 @@ interface ItemManagerProps {
   kpId: string;
   items: (KpItem & { variants: KpItemVariant[] })[];
   onItemsChange: (items: (KpItem & { variants: KpItemVariant[] })[]) => void;
+  readOnly?: boolean;
 }
 
 interface ItemFormState {
@@ -57,6 +58,7 @@ export default function ItemManager({
   kpId,
   items,
   onItemsChange,
+  readOnly = false,
 }: ItemManagerProps) {
   const supabase = createClient();
 
@@ -75,15 +77,6 @@ export default function ItemManager({
 
   const getMaxSortOrder = useCallback(
     () => (items.length > 0 ? Math.max(...items.map((i) => i.sort_order ?? 0)) + 1 : 0),
-    [items]
-  );
-
-  const getMaxVariantSortOrder = useCallback(
-    (itemId: string) => {
-      const item = items.find((i) => i.id === itemId);
-      if (!item || item.variants.length === 0) return 0;
-      return Math.max(...item.variants.map((v) => v.sort_order ?? 0)) + 1;
-    },
     [items]
   );
 
@@ -216,29 +209,24 @@ export default function ItemManager({
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= sorted.length) return;
 
-    const current = sorted[idx];
-    const other = sorted[swapIdx];
+    const newOrder = [...sorted];
+    [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
 
-    const currentOrder = current.sort_order ?? 0;
-    const otherOrder = other.sort_order ?? 0;
+    const itemIds = newOrder.map((i) => i.id);
 
     setSubmitting(true);
     try {
-      await supabase
-        .from("kp_items")
-        .update({ sort_order: otherOrder })
-        .eq("id", current.id);
-
-      await supabase
-        .from("kp_items")
-        .update({ sort_order: currentOrder })
-        .eq("id", other.id);
-
-      const updated = sorted.map((i) => {
-        if (i.id === current.id) return { ...i, sort_order: otherOrder };
-        if (i.id === other.id) return { ...i, sort_order: currentOrder };
-        return i;
+      const { error } = await supabase.rpc("reorder_kp_items", {
+        p_kp_id: kpId,
+        p_item_ids: itemIds,
       });
+
+      if (error) throw error;
+
+      const updated = newOrder.map((item, i) => ({
+        ...item,
+        sort_order: i,
+      }));
       onItemsChange(updated);
     } catch (err: unknown) {
       showError(getErrorMessage(err) || "Не удалось переместить позицию");
@@ -260,51 +248,29 @@ export default function ItemManager({
     }
     setSubmitting(true);
     try {
-      const { data, error } = await supabase
-        .from("kp_item_variants")
-        .insert({
-          item_id: itemId,
-          name: variantForm.name.trim(),
-          material: variantForm.material.trim() || null,
-          hardware: variantForm.hardware.trim() || null,
-          description: variantForm.description.trim() || null,
-          price: variantForm.price,
-          is_default: variantForm.is_default,
-          sort_order: getMaxVariantSortOrder(itemId),
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc("add_kp_variant", {
+        p_item_id: itemId,
+        p_name: variantForm.name.trim(),
+        p_material: variantForm.material.trim() || null,
+        p_hardware: variantForm.hardware.trim() || null,
+        p_description: variantForm.description.trim() || null,
+        p_price: variantForm.price,
+        p_is_default: variantForm.is_default,
+      });
 
       if (error) throw error;
 
-      if (variantForm.is_default) {
-        await supabase
-          .from("kp_item_variants")
-          .update({ is_default: false })
-          .eq("item_id", itemId)
-          .neq("id", data.id);
+      const newVariant = data as KpItemVariant;
 
-        onItemsChange(
-          items.map((i) => {
-            if (i.id !== itemId) return i;
-            return {
-              ...i,
-              variants: [
-                ...i.variants.map((v) => ({ ...v, is_default: false })),
-                data,
-              ],
-            };
-          })
-        );
-      } else {
-        onItemsChange(
-          items.map((i) =>
-            i.id === itemId
-              ? { ...i, variants: [...i.variants, data] }
-              : i
-          )
-        );
-      }
+      onItemsChange(
+        items.map((i) => {
+          if (i.id !== itemId) return i;
+          const updatedVariants = variantForm.is_default
+            ? [...i.variants.map((v) => ({ ...v, is_default: false })), newVariant]
+            : [...i.variants, newVariant];
+          return { ...i, variants: updatedVariants };
+        })
+      );
       resetVariantForm();
     } catch (err: unknown) {
       showError(getErrorMessage(err) || "Не удалось добавить вариант");
@@ -718,7 +684,7 @@ export default function ItemManager({
                 )}
               </div>
 
-              {!isEditing && (
+              {!isEditing && !readOnly && (
                 <div className="flex gap-1 shrink-0">
                   <Button
                     type="button"
@@ -833,7 +799,7 @@ export default function ItemManager({
                               )}
                             </div>
                             <div className="flex gap-1 shrink-0 ml-2">
-                              {!variant.is_default && (
+                              {!variant.is_default && !readOnly && (
                                 <Button
                                   type="button"
                                   variant="ghost"
@@ -848,38 +814,42 @@ export default function ItemManager({
                                   ☆
                                 </Button>
                               )}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 text-xs text-stone-400 hover:text-amber-600"
-                                disabled={submitting}
-                                onClick={() => {
-                                  setEditingVariantId(variant.id);
-                                  setVariantForm({
-                                    name: variant.name,
-                                    material: variant.material || "",
-                                    hardware: variant.hardware || "",
-                                    description: variant.description || "",
-                                    price: variant.price ?? 0,
-                                    is_default: variant.is_default,
-                                  });
-                                }}
-                              >
-                                ✎
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 text-xs text-stone-400 hover:text-red-500"
-                                disabled={submitting}
-                                onClick={() =>
-                                  handleDeleteVariant(item.id, variant.id)
-                                }
-                              >
-                                ✕
-                              </Button>
+                              {!readOnly && (
+                                <>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-xs text-stone-400 hover:text-amber-600"
+                                    disabled={submitting}
+                                    onClick={() => {
+                                      setEditingVariantId(variant.id);
+                                      setVariantForm({
+                                        name: variant.name,
+                                        material: variant.material || "",
+                                        hardware: variant.hardware || "",
+                                        description: variant.description || "",
+                                        price: variant.price ?? 0,
+                                        is_default: variant.is_default,
+                                      });
+                                    }}
+                                  >
+                                    ✎
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-xs text-stone-400 hover:text-red-500"
+                                    disabled={submitting}
+                                    onClick={() =>
+                                      handleDeleteVariant(item.id, variant.id)
+                                    }
+                                  >
+                                    ✕
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </>
                         )}
@@ -898,7 +868,7 @@ export default function ItemManager({
                   : null}
               </div>
 
-              {!isEditing && !isAddingVariant && (
+              {!isEditing && !isAddingVariant && !readOnly && (
                 <div className="mt-3 pt-3 border-t border-stone-100 flex justify-center">
                   <Button
                     type="button"
@@ -936,7 +906,7 @@ export default function ItemManager({
           )
         : null}
 
-      {!addingItem && items.length < MAX_ITEMS && (
+      {!addingItem && items.length < MAX_ITEMS && !readOnly && (
         <Button
           type="button"
           variant="secondary"

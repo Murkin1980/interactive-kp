@@ -163,63 +163,17 @@ export default function ProposalDetailForm() {
 
   const handleDuplicate = async () => {
     if (!kp) return;
-    const { data: newKp, error: kpError } = await supabase
-      .from("kps")
-      .insert({
-        client_name: kp.client_name,
-        client_phone: kp.client_phone,
-        project_name: kp.project_name,
-        number: null,
-        valid_until: kp.valid_until,
-        notes: kp.notes,
-        advance_percent: kp.advance_percent,
-        balance_condition: kp.balance_condition,
-        discount_type: kp.discount_type,
-        discount_value: kp.discount_value,
-      })
-      .select()
-      .single();
+    const { data: newKpId, error: dupError } = await supabase.rpc(
+      "duplicate_kp",
+      { p_kp_id: kp.id }
+    );
 
-    if (kpError || !newKp) return;
-
-    if (items.length > 0) {
-      const newItems = items.map((item) => ({
-        kp_id: newKp.id,
-        name: item.name,
-        description: item.description,
-        dimensions: item.dimensions,
-        quantity: item.quantity,
-        image_url: item.image_url,
-        sort_order: item.sort_order,
-      }));
-
-      const { data: newItemsData } = await supabase
-        .from("kp_items")
-        .insert(newItems)
-        .select();
-
-      if (newItemsData) {
-        const variantInserts = items.flatMap((item, idx) => {
-          const newItem = newItemsData[idx];
-          if (!newItem) return [];
-          return item.variants.map((variant) => ({
-            item_id: newItem.id,
-            name: variant.name,
-            material: variant.material,
-            hardware: variant.hardware,
-            description: variant.description,
-            price: variant.price,
-            is_default: variant.is_default,
-          }));
-        });
-
-        if (variantInserts.length > 0) {
-          await supabase.from("kp_item_variants").insert(variantInserts);
-        }
-      }
+    if (dupError || !newKpId) {
+      setErrors({ root: "Ошибка дублирования: " + (dupError?.message ?? "Неизвестная ошибка") });
+      return;
     }
 
-    router.push(`/proposals/${newKp.id}`);
+    router.push(`/proposals/${newKpId}`);
   };
 
   const getPublicUrl = () => {
@@ -302,6 +256,8 @@ export default function ProposalDetailForm() {
     );
   }
 
+  const isReadOnly = kp.status === "confirmed" || kp.status === "expired";
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
@@ -317,9 +273,11 @@ export default function ProposalDetailForm() {
           <Button variant="secondary" onClick={() => router.push("/proposals")}>
             Назад
           </Button>
-          <Button variant="danger" onClick={handleDelete}>
-            Удалить
-          </Button>
+          {!isReadOnly && (
+            <Button variant="danger" onClick={handleDelete}>
+              Удалить
+            </Button>
+          )}
         </div>
       </div>
 
@@ -340,6 +298,7 @@ export default function ProposalDetailForm() {
                   }
                   error={errors.client_name}
                   required
+                  disabled={isReadOnly}
                 />
                 <Input
                   id="client_phone"
@@ -348,6 +307,7 @@ export default function ProposalDetailForm() {
                   onChange={(e) =>
                     setFormData({ ...formData, client_phone: e.target.value })
                   }
+                  disabled={isReadOnly}
                 />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -361,6 +321,7 @@ export default function ProposalDetailForm() {
                   error={errors.project_name}
                   placeholder="Кухня, Гардеробная и т.д."
                   required
+                  disabled={isReadOnly}
                 />
                 <Input
                   id="number"
@@ -370,6 +331,7 @@ export default function ProposalDetailForm() {
                     setFormData({ ...formData, number: e.target.value })
                   }
                   placeholder="КП-2026-001"
+                  disabled={isReadOnly}
                 />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -381,6 +343,7 @@ export default function ProposalDetailForm() {
                   onChange={(e) =>
                     setFormData({ ...formData, valid_until: e.target.value })
                   }
+                  disabled={isReadOnly}
                 />
                 <Input
                   id="advance_percent"
@@ -395,6 +358,7 @@ export default function ProposalDetailForm() {
                       advance_percent: parseInt(e.target.value) || 0,
                     })
                   }
+                  disabled={isReadOnly}
                 />
                 <Input
                   id="balance_condition"
@@ -406,6 +370,7 @@ export default function ProposalDetailForm() {
                       balance_condition: e.target.value,
                     })
                   }
+                  disabled={isReadOnly}
                 />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -421,6 +386,7 @@ export default function ProposalDetailForm() {
                     { value: "percent", label: "Процентная" },
                     { value: "fixed", label: "Фиксированная" },
                   ]}
+                  disabled={isReadOnly}
                 />
                 {formData.discount_type !== "none" && (
                   <Input
@@ -439,6 +405,7 @@ export default function ProposalDetailForm() {
                         discount_value: parseInt(e.target.value) || 0,
                       })
                     }
+                    disabled={isReadOnly}
                   />
                 )}
               </div>
@@ -450,13 +417,23 @@ export default function ProposalDetailForm() {
                   setFormData({ ...formData, notes: e.target.value })
                 }
                 placeholder="Дополнительная информация..."
+                disabled={isReadOnly}
               />
               {errors.root && (
                 <p className="text-sm text-red-600">{errors.root}</p>
               )}
-              <Button type="submit" disabled={saving}>
-                {saving ? "Сохранение..." : "Сохранить изменения"}
-              </Button>
+              {!isReadOnly && (
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Сохранение..." : "Сохранить изменения"}
+                </Button>
+              )}
+              {isReadOnly && (
+                <p className="text-sm text-stone-500 italic">
+                  {kp.status === "confirmed"
+                    ? "КП подтверждено клиентом. Для изменений создайте дубликат."
+                    : "Срок действия КП истёк. Для изменений создайте дубликат."}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -467,7 +444,7 @@ export default function ProposalDetailForm() {
           <h2 className="text-lg font-semibold text-stone-800">Позиции</h2>
         </CardHeader>
         <CardContent>
-          <ItemManager kpId={id} items={items} onItemsChange={setItems} />
+          <ItemManager kpId={id} items={items} onItemsChange={setItems} readOnly={isReadOnly} />
         </CardContent>
       </Card>
 
@@ -554,7 +531,7 @@ export default function ProposalDetailForm() {
               <Button type="button" variant="secondary" onClick={handleShareWhatsApp}>
                 Отправить в WhatsApp
               </Button>
-              {kp.status === "draft" && (
+              {kp.status === "draft" && !isReadOnly && (
                 <Button type="button" onClick={handlePublish}>
                   Опубликовать
                 </Button>

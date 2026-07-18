@@ -8,10 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { calculateKp } from "@/lib/utils/calculation";
 import type { Kp, KpItem, KpItemVariant } from "@/types";
 
 type KpWithVariants = Kp & {
+  items: (KpItem & { variants: KpItemVariant[] })[];
+};
+
+type PublicKpData = Omit<Kp, "client_id" | "public_token" | "owner_id"> & {
   items: (KpItem & { variants: KpItemVariant[] })[];
 };
 
@@ -28,6 +31,7 @@ export default function PublicProposalView() {
   const [expired, setExpired] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -48,49 +52,50 @@ export default function PublicProposalView() {
         return;
       }
 
-      const { data: kpData, error: kpError } = await supabase
-        .from("kps")
-        .select("*")
-        .eq("public_token", token)
-        .single();
+      // Use secure RPC to fetch KP data
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        "get_public_kp",
+        { p_token: token }
+      );
 
-      if (!cancelled && (kpError || !kpData)) {
+      if (!cancelled && rpcError) {
+        setLoadError("Ошибка загрузки: " + rpcError.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!cancelled && !rpcData) {
         setNotFound(true);
         setLoading(false);
         return;
       }
 
-      if (!cancelled && kpData) {
-        if (kpData.valid_until && new Date(kpData.valid_until) < new Date()) {
-          setExpired(true);
-          setLoading(false);
-          return;
-        }
+      if (!cancelled && rpcData) {
+        const kpData = rpcData as PublicKpData;
 
-        if (kpData.status === "sent") {
-          const { error: statusError } = await supabase
-            .from("kps")
-            .update({ status: "viewed" })
-            .eq("id", kpData.id);
-          if (!statusError) {
-            kpData.status = "viewed";
-          }
+        // Check expiry
+        const isExpired =
+          kpData.valid_until && new Date(kpData.valid_until) < new Date();
+        if (isExpired) {
+          setExpired(true);
         }
 
         if (kpData.status === "confirmed") {
           setConfirmed(true);
         }
 
-        const { data: itemsData } = await supabase
-          .from("kp_items")
-          .select("*, variants:kp_item_variants(*)")
-          .eq("kp_id", kpData.id)
-          .order("sort_order");
+        // Mark as viewed via RPC (idempotent)
+        if (kpData.status === "sent") {
+          await supabase.rpc("mark_kp_viewed", { p_token: token });
+          kpData.status = "viewed";
+        }
 
-        const typedItems = (itemsData ?? []) as (KpItem & {
+        // Build typed items with variants
+        const typedItems = (kpData.items ?? []) as (KpItem & {
           variants: KpItemVariant[];
         })[];
 
+        // For confirmed KPs, try to restore previously selected variants
         let initialVariants: Record<string, string> = {};
 
         if (kpData.status === "confirmed") {
@@ -103,10 +108,14 @@ export default function PublicProposalView() {
             .maybeSingle();
 
           if (confirmationData?.selected_variants) {
-            initialVariants = confirmationData.selected_variants as Record<string, string>;
+            initialVariants = confirmationData.selected_variants as Record<
+              string,
+              string
+            >;
           }
         }
 
+        // Fall back to default variants
         if (Object.keys(initialVariants).length === 0) {
           for (const item of typedItems) {
             const defaultVar = item.variants.find((v) => v.is_default);
@@ -119,7 +128,13 @@ export default function PublicProposalView() {
         }
 
         if (!cancelled) {
-          setProposal({ ...kpData, items: typedItems });
+          setProposal({
+            ...kpData,
+            items: typedItems,
+            client_id: null,
+            public_token: token,
+            owner_id: "",
+          } as KpWithVariants);
           setSelectedVariants(initialVariants);
           setLoading(false);
         }
@@ -130,35 +145,38 @@ export default function PublicProposalView() {
     };
   }, [token, supabase]);
 
+  // Client-side calculation for display (server recalculates on confirm)
   const calculation = proposal
-    ? calculateKp(
-        proposal.items,
-        selectedVariants,
-        proposal.discount_type,
-        proposal.discount_value,
-        proposal.advance_percent
-      )
+    ? calculateClientSide(proposal, selectedVariants)
     : null;
 
   const handleVariantChange = (itemId: string, variantId: string) => {
-    if (confirmed) return;
+    if (confirmed || expired) return;
     setSelectedVariants((prev) => ({ ...prev, [itemId]: variantId }));
   };
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!proposal || confirming) return;
+    if (!proposal || confirming || expired) return;
+
+    // Validate all items have selections
+    const allSelected = proposal.items.every(
+      (item) => selectedVariants[item.id]
+    );
+    if (!allSelected) {
+      setSubmitError("Выберите вариант в каждой позиции");
+      return;
+    }
 
     setConfirming(true);
     setSubmitError(null);
 
-    const { error } = await supabase.from("kp_confirmations").insert({
-      kp_id: proposal.id,
-      client_name: formData.client_name || null,
-      client_phone: formData.client_phone || null,
-      comment: formData.comment || null,
-      selected_variants: selectedVariants,
-      selected_total: calculation?.total ?? 0,
+    const { data, error } = await supabase.rpc("confirm_public_kp", {
+      p_token: token,
+      p_client_name: formData.client_name || null,
+      p_client_phone: formData.client_phone || null,
+      p_comment: formData.comment || null,
+      p_selected_variants: selectedVariants,
     });
 
     if (error) {
@@ -167,20 +185,19 @@ export default function PublicProposalView() {
       return;
     }
 
-    const { error: statusError } = await supabase
-      .from("kps")
-      .update({
-        status: "confirmed",
-        confirmed_at: new Date().toISOString(),
-        selected_total: calculation?.total ?? 0,
-      })
-      .eq("id", proposal.id);
+    const result = data as {
+      success: boolean;
+      already_confirmed?: boolean;
+      confirmed_at?: string;
+      selected_total?: number;
+    };
 
-    if (statusError) {
-      setSubmitError("Заказ сохранён, но статус не обновился: " + statusError.message);
+    if (result?.success) {
+      setConfirmed(true);
+    } else {
+      setSubmitError("Неожиданный ответ сервера");
     }
 
-    setConfirmed(true);
     setConfirming(false);
   };
 
@@ -191,6 +208,22 @@ export default function PublicProposalView() {
           <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-amber-600 border-t-transparent" />
           <p className="text-sm text-stone-500">Загрузка...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-stone-100 px-4">
+        <Card className="w-full max-w-md text-center">
+          <CardContent>
+            <div className="mb-4 text-5xl">⚠️</div>
+            <h1 className="mb-2 text-xl font-bold text-stone-800">
+              Ошибка загрузки
+            </h1>
+            <p className="text-sm text-stone-500">{loadError}</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -214,31 +247,21 @@ export default function PublicProposalView() {
     );
   }
 
-  if (expired) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-100 px-4">
-        <Card className="w-full max-w-md text-center">
-          <CardContent>
-            <div className="mb-4 text-5xl">⏰</div>
-            <h1 className="mb-2 text-xl font-bold text-stone-800">
-              Срок действия истёк
-            </h1>
-            <p className="text-sm text-stone-500">
-              Срок действия данного коммерческого предложения истёк. Пожалуйста,
-              обратитесь к вашему менеджеру для получения обновлённого
-              предложения.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   if (!proposal) return null;
 
   return (
     <div className="min-h-screen bg-stone-100 px-4 py-8">
       <div className="mx-auto max-w-2xl space-y-6">
+        {/* Expired banner */}
+        {expired && (
+          <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-center">
+            <p className="text-sm font-medium text-red-800">
+              Срок действия данного коммерческого предложения истёк.
+              Подтверждение невозможно.
+            </p>
+          </div>
+        )}
+
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -329,7 +352,7 @@ export default function PublicProposalView() {
                           selectedVariants[item.id] === variant.id
                             ? "border-amber-500 bg-amber-50"
                             : "border-stone-200 bg-white hover:bg-stone-50"
-                        } ${confirmed ? "pointer-events-none opacity-70" : ""}`}
+                        } ${confirmed || expired ? "pointer-events-none opacity-70" : ""}`}
                       >
                         <input
                           type="radio"
@@ -339,7 +362,7 @@ export default function PublicProposalView() {
                           onChange={() =>
                             handleVariantChange(item.id, variant.id)
                           }
-                          disabled={confirmed}
+                          disabled={confirmed || expired}
                           className="h-4 w-4 border-stone-300 text-amber-600 focus:ring-amber-500"
                         />
                         <div className="flex-1">
@@ -452,7 +475,7 @@ export default function PublicProposalView() {
           </Card>
         )}
 
-        {!confirmed ? (
+        {!confirmed && !expired ? (
           <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold text-stone-800">
@@ -514,13 +537,14 @@ export default function PublicProposalView() {
               <div className="py-6 text-center">
                 <div className="mb-4 text-5xl">✅</div>
                 <h2 className="mb-2 text-xl font-bold text-stone-800">
-                  Заказ подтверждён!
+                  {confirmed ? "Заказ подтверждён!" : "Срок действия истёк"}
                 </h2>
                 <p className="text-sm text-stone-500">
-                  Спасибо! Ваш заказ принят. Менеджер свяжется с вами для
-                  уточнения деталей.
+                  {confirmed
+                    ? "Спасибо! Ваш заказ принят. Менеджер свяжется с вами для уточнения деталей."
+                    : "Срок действия данного предложения истёк. Обратитесь к менеджеру за обновлённым КП."}
                 </p>
-                {proposal.balance_condition && (
+                {confirmed && proposal.balance_condition && (
                   <div className="mt-4 rounded-lg bg-amber-50 p-3">
                     <p className="text-sm text-stone-700">
                       Остаток:{" "}
@@ -542,4 +566,35 @@ export default function PublicProposalView() {
       </div>
     </div>
   );
+}
+
+// Client-side calculation for display purposes
+function calculateClientSide(
+  proposal: KpWithVariants,
+  selectedVariants: Record<string, string>
+) {
+  let subtotal = 0;
+
+  for (const item of proposal.items) {
+    const selectedVariantId = selectedVariants[item.id];
+    const variant = item.variants.find((v) => v.id === selectedVariantId);
+    if (variant) {
+      subtotal += variant.price * item.quantity;
+    }
+  }
+
+  let discountAmount = 0;
+  if (proposal.discount_type === "percent") {
+    discountAmount = Math.round(
+      (subtotal * proposal.discount_value) / 100
+    );
+  } else if (proposal.discount_type === "fixed") {
+    discountAmount = Math.min(proposal.discount_value, subtotal);
+  }
+
+  const total = subtotal - discountAmount;
+  const advance = Math.round((total * proposal.advance_percent) / 100);
+  const balance = total - advance;
+
+  return { subtotal, discountAmount, total, advance, balance };
 }
