@@ -84,12 +84,15 @@ export default function ItemManager({
     let cancelled = false;
     void (async () => {
       const next: Record<string, string> = {};
-      await Promise.all(items.map(async (item) => {
-        const path = item.original_image_url || item.image_url;
+      const media = items.flatMap((item) => [
+        { key: `${item.id}:original`, path: item.original_image_url || item.image_url },
+        { key: `${item.id}:sketch`, path: item.sketch_image_url },
+      ]);
+      await Promise.all(media.map(async ({ key, path }) => {
         if (!path) return;
-        if (/^https?:\/\//.test(path)) { next[item.id] = path; return; }
+        if (/^https?:\/\//.test(path)) { next[key] = path; return; }
         const { data } = await supabase.storage.from("kp-media").createSignedUrl(path, 3600);
-        if (data?.signedUrl) next[item.id] = data.signedUrl;
+        if (data?.signedUrl) next[key] = data.signedUrl;
       }));
       if (!cancelled) setPreviewUrls(next);
     })();
@@ -121,7 +124,7 @@ export default function ItemManager({
   const getErrorMessage = (err: unknown): string =>
     err instanceof Error ? err.message : String(err);
 
-  const handlePhotoUpload = async (itemId: string, file: File) => {
+  const handlePhotoUpload = async (itemId: string, file: File, kind: "original" | "sketch") => {
     if (readOnly) return;
     const allowed = ["image/jpeg", "image/png", "image/webp"];
     if (!allowed.includes(file.type)) { showError("Загрузите JPG, PNG или WebP."); return; }
@@ -131,27 +134,31 @@ export default function ItemManager({
       const { data: kp, error: kpError } = await supabase.from("kps").select("public_token").eq("id", kpId).single();
       if (kpError) throw kpError;
       const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-      const path = `${kpId}/${kp.public_token}/items/${itemId}-${Date.now()}.${extension}`;
+      const path = `${kpId}/${kp.public_token}/items/${itemId}-${kind}-${crypto.randomUUID()}.${extension}`;
       const { error: uploadError } = await supabase.storage.from("kp-media").upload(path, file, { contentType: file.type, upsert: false });
       if (uploadError) throw uploadError;
-      const previous = items.find((item) => item.id === itemId)?.original_image_url;
-      const { error: updateError } = await supabase.from("kp_items").update({ original_image_url: path, image_url: path }).eq("id", itemId);
+      const current = items.find((item) => item.id === itemId);
+      const previous = kind === "original" ? (current?.original_image_url || current?.image_url) : current?.sketch_image_url;
+      const values = kind === "original" ? { original_image_url: path, image_url: path } : { sketch_image_url: path };
+      const { error: updateError } = await supabase.from("kp_items").update(values).eq("id", itemId);
       if (updateError) { await supabase.storage.from("kp-media").remove([path]); throw updateError; }
       if (previous && !/^https?:\/\//.test(previous)) await supabase.storage.from("kp-media").remove([previous]);
-      onItemsChange(items.map((item) => item.id === itemId ? { ...item, original_image_url: path, image_url: path } : item));
+      onItemsChange(items.map((item) => item.id === itemId ? { ...item, ...values } : item));
     } catch (error) { showError(getErrorMessage(error) || "Не удалось загрузить фотографию"); }
     finally { setUploadingItemId(null); }
   };
 
-  const handlePhotoDelete = async (itemId: string) => {
-    const item = items.find((candidate) => candidate.id === itemId); const path = item?.original_image_url || item?.image_url;
+  const handlePhotoDelete = async (itemId: string, kind: "original" | "sketch") => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    const path = kind === "original" ? (item?.original_image_url || item?.image_url) : item?.sketch_image_url;
     if (!item || !path || readOnly) return;
     setUploadingItemId(itemId);
     try {
-      const { error } = await supabase.from("kp_items").update({ original_image_url: null, image_url: null }).eq("id", itemId);
+      const values = kind === "original" ? { original_image_url: null, image_url: null } : { sketch_image_url: null };
+      const { error } = await supabase.from("kp_items").update(values).eq("id", itemId);
       if (error) throw error;
       if (!/^https?:\/\//.test(path)) await supabase.storage.from("kp-media").remove([path]);
-      onItemsChange(items.map((candidate) => candidate.id === itemId ? { ...candidate, original_image_url: null, image_url: null } : candidate));
+      onItemsChange(items.map((candidate) => candidate.id === itemId ? { ...candidate, ...values } : candidate));
     } catch (error) { showError(getErrorMessage(error) || "Не удалось удалить фотографию"); }
     finally { setUploadingItemId(null); }
   };
@@ -791,25 +798,36 @@ export default function ItemManager({
                 : null}
 
               {!isEditing && (
-                <div className="mb-4 rounded-xl border border-dashed border-stone-300 bg-stone-50 p-3 transition-colors hover:border-amber-400">
-                  {previewUrls[item.id] ? (
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <Image unoptimized src={previewUrls[item.id]} alt={`Фото: ${item.name}`} width={320} height={224} className="h-28 w-full rounded-lg object-cover sm:w-40" />
-                      <div className="flex flex-1 flex-wrap gap-2">
-                        {!readOnly && <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors hover:bg-amber-700">
-                          <Upload size={16} /> Заменить фото
-                          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingItemId===item.id} onChange={(event)=>{const file=event.target.files?.[0];if(file) void handlePhotoUpload(item.id,file);event.target.value="";}} />
-                        </label>}
-                        {!readOnly && <Button type="button" variant="secondary" onClick={()=>void handlePhotoDelete(item.id)} disabled={uploadingItemId===item.id} className="gap-2 transition-colors hover:bg-red-50 hover:text-red-700"><Trash2 size={16}/>Удалить</Button>}
+                <div className="mb-4 grid gap-3 md:grid-cols-2">
+                  {([
+                    { kind: "original" as const, title: "Визуализация мебели", hint: "Фото или реалистичный рендер" },
+                    { kind: "sketch" as const, title: "Эскиз с размерами", hint: "Чертёж, схема или карандашный эскиз" },
+                  ]).map(({ kind, title, hint }) => {
+                    const preview = previewUrls[`${item.id}:${kind}`];
+                    return (
+                      <div key={kind} className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-3 transition-colors hover:border-amber-400">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">{title}</p>
+                        {preview ? (
+                          <>
+                            <Image unoptimized src={preview} alt={`${title}: ${item.name}`} width={480} height={320} className="h-36 w-full rounded-lg bg-white object-contain" />
+                            {!readOnly && <div className="mt-3 flex flex-wrap gap-2">
+                              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors hover:bg-amber-700">
+                                <Upload size={16} /> Заменить
+                                <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingItemId===item.id} onChange={(event)=>{const file=event.target.files?.[0];if(file) void handlePhotoUpload(item.id,file,kind);event.target.value="";}} />
+                              </label>
+                              <Button type="button" variant="secondary" onClick={()=>void handlePhotoDelete(item.id,kind)} disabled={uploadingItemId===item.id} className="gap-2 transition-colors hover:bg-red-50 hover:text-red-700"><Trash2 size={16}/>Удалить</Button>
+                            </div>}
+                          </>
+                        ) : (
+                          <label className={`flex min-h-36 items-center justify-center gap-3 rounded-lg bg-white px-3 text-sm text-stone-600 transition-colors hover:bg-amber-50 ${readOnly?"cursor-default":"cursor-pointer"}`}>
+                            {uploadingItemId===item.id?<Loader2 size={22} className="animate-spin text-amber-600"/>:<ImagePlus size={22} className="shrink-0 text-amber-700"/>}
+                            <span><b className="block text-stone-800">{uploadingItemId===item.id?"Загрузка...":title}</b>{hint}<small className="mt-1 block text-stone-400">JPG, PNG или WebP до 10 МБ</small></span>
+                            {!readOnly && <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingItemId===item.id} onChange={(event)=>{const file=event.target.files?.[0];if(file) void handlePhotoUpload(item.id,file,kind);event.target.value="";}}/>}
+                          </label>
+                        )}
                       </div>
-                    </div>
-                  ) : (
-                    <label className={`flex min-h-24 items-center justify-center gap-3 text-sm text-stone-600 ${readOnly?"cursor-default":"cursor-pointer"}`}>
-                      {uploadingItemId===item.id?<Loader2 size={22} className="animate-spin text-amber-600"/>:<ImagePlus size={22} className="text-amber-700"/>}
-                      <span><b className="block text-stone-800">{uploadingItemId===item.id?"Загрузка...":"Добавить фотографию или эскиз"}</b>JPG, PNG или WebP до 10 МБ</span>
-                      {!readOnly && <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingItemId===item.id} onChange={(event)=>{const file=event.target.files?.[0];if(file) void handlePhotoUpload(item.id,file);event.target.value="";}}/>}
-                    </label>
-                  )}
+                    );
+                  })}
                 </div>
               )}
 

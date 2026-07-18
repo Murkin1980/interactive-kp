@@ -111,11 +111,16 @@ export default function PublicProposalView() {
 
         // Build typed items with variants
         const typedItems = await Promise.all(((kpData.items ?? []) as PublicItem[]).map(async (item) => {
-          const path = item.original_image_url || item.image_url;
-          if (!path || /^https?:\/\//.test(path)) return item;
-          const { data } = await supabase.storage.from("kp-media").createSignedUrl(path, 3600);
-          if (!data?.signedUrl) return item;
-          return { ...item, image_url: data.signedUrl, original_image_url: data.signedUrl };
+          const signMedia = async (path: string | null | undefined) => {
+            if (!path || /^https?:\/\//.test(path)) return path;
+            const { data } = await supabase.storage.from("kp-media").createSignedUrl(path, 3600);
+            return data?.signedUrl || path;
+          };
+          const [original, sketch] = await Promise.all([
+            signMedia(item.original_image_url || item.image_url),
+            signMedia(item.sketch_image_url),
+          ]);
+          return { ...item, image_url: original, original_image_url: original, sketch_image_url: sketch };
         }));
 
         // For confirmed KPs, try to restore previously selected variants
@@ -311,7 +316,8 @@ export default function PublicProposalView() {
       pdf.addFileToVFS("NotoSans-Bold.ttf", arrayBufferToBase64(boldFont));
       pdf.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
       pdf.addFont("NotoSans-Bold.ttf", "NotoSans", "bold");
-      renderEstimatePdf(pdf, proposal, selectedVariants, selectedOptions, calculation, revision);
+      const pdfImages = await loadPdfImages(proposal);
+      renderEstimatePdf(pdf, proposal, selectedVariants, selectedOptions, calculation, revision, pdfImages);
       const blob = pdf.output("blob");
       const path = `${proposal.id}/${token}/approval-v${revision}.pdf`;
       const { error: uploadError } = await supabase.storage.from("kp-media").upload(path, blob, { contentType: "application/pdf", upsert: false });
@@ -484,15 +490,17 @@ export default function PublicProposalView() {
                   key={item.id}
                   className="space-y-3 rounded-lg border border-stone-200 p-4"
                 >
-                  {(item.original_image_url || item.image_url) && (
-                    <Image
-                      unoptimized
-                      src={item.original_image_url || item.image_url || ""}
-                      alt={`Визуализация: ${item.name}`}
-                      width={1200}
-                      height={800}
-                      className="max-h-[520px] w-full rounded-xl bg-stone-100 object-contain"
-                    />
+                  {(item.original_image_url || item.image_url || item.sketch_image_url) && (
+                    <div className={`grid gap-3 ${(item.original_image_url || item.image_url) && item.sketch_image_url ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+                      {(item.original_image_url || item.image_url) && <figure>
+                        <figcaption className="mb-1 text-xs font-medium text-stone-500">Визуализация мебели</figcaption>
+                        <Image unoptimized src={item.original_image_url || item.image_url || ""} alt={`Визуализация: ${item.name}`} width={900} height={650} className="h-64 w-full rounded-xl bg-stone-100 object-contain sm:h-72" />
+                      </figure>}
+                      {item.sketch_image_url && <figure>
+                        <figcaption className="mb-1 text-xs font-medium text-stone-500">Эскиз с размерами</figcaption>
+                        <Image unoptimized src={item.sketch_image_url} alt={`Эскиз с размерами: ${item.name}`} width={900} height={650} className="h-64 w-full rounded-xl bg-stone-100 object-contain sm:h-72" />
+                      </figure>}
+                    </div>
                   )}
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -780,7 +788,29 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return btoa(binary);
 }
 
-function renderEstimatePdf(pdf: JsPdf, proposal: KpWithVariants, selectedVariants: Record<string,string>, selectedOptions: Record<string,string>, calculation: {subtotal:number;discountAmount:number;total:number;advance:number;balance:number}, revision: number) {
+type PdfItemImages = Record<string, { original?: string; sketch?: string }>;
+
+async function imageUrlToDataUrl(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Не удалось загрузить изображение (${response.status})`);
+  const blob = await response.blob();
+  return `data:${blob.type || "image/jpeg"};base64,${arrayBufferToBase64(await blob.arrayBuffer())}`;
+}
+
+async function loadPdfImages(proposal: KpWithVariants): Promise<PdfItemImages> {
+  const entries = await Promise.all(proposal.items.map(async (item) => {
+    const result: { original?: string; sketch?: string } = {};
+    const originalUrl = item.original_image_url || item.image_url;
+    await Promise.all([
+      originalUrl ? imageUrlToDataUrl(originalUrl).then((data) => { result.original = data; }).catch(() => undefined) : undefined,
+      item.sketch_image_url ? imageUrlToDataUrl(item.sketch_image_url).then((data) => { result.sketch = data; }).catch(() => undefined) : undefined,
+    ]);
+    return [item.id, result] as const;
+  }));
+  return Object.fromEntries(entries);
+}
+
+function renderEstimatePdf(pdf: JsPdf, proposal: KpWithVariants, selectedVariants: Record<string,string>, selectedOptions: Record<string,string>, calculation: {subtotal:number;discountAmount:number;total:number;advance:number;balance:number}, revision: number, pdfImages: PdfItemImages) {
   const left=16, right=194, pageBottom=278; let y=18;
   const text=(value:string,x:number,size=10,style:"normal"|"bold"="normal",color:[number,number,number]=[35,35,31])=>{pdf.setFont("NotoSans",style);pdf.setFontSize(size);pdf.setTextColor(...color);pdf.text(value,x,y);};
   const line=()=>{pdf.setDrawColor(205,198,184);pdf.line(left,y,right,y);y+=5;};
@@ -789,6 +819,8 @@ function renderEstimatePdf(pdf: JsPdf, proposal: KpWithVariants, selectedVariant
   text(proposal.project_name,left,20,"bold"); y+=9; text(`${proposal.number} · редакция ${revision}`,left,9); text(proposal.client_name,140,9,"bold"); y+=8; line();
   proposal.items.forEach((item,index)=>{space(40);const variant=item.variants.find(v=>v.id===selectedVariants[item.id]);const options=(item.option_groups??[]).map(group=>({group,value:group.values.find(v=>v.id===selectedOptions[group.id])})).filter(entry=>entry.value);const itemTotal=((variant?.price??0)+options.reduce((sum,e)=>sum+(e.value?.price_delta??0),0))*item.quantity;
     text(`${index+1}. ${item.name}`,left,13,"bold"); text(formatCurrency(itemTotal),158,11,"bold"); y+=7;text(`${item.dimensions||"Размер по проекту"} · ${item.quantity} шт.`,left,8,"normal",[115,111,104]);y+=7;
+    const media = pdfImages[item.id]; const mediaEntries = [["Визуализация",media?.original],["Эскиз с размерами",media?.sketch]].filter((entry): entry is [string,string]=>Boolean(entry[1]));
+    if(mediaEntries.length){space(43);const rowY=y;const gap=6;const cellWidth=mediaEntries.length===2?86:178;const maxHeight=31;mediaEntries.forEach(([label,data],mediaIndex)=>{const x=left+mediaIndex*(cellWidth+gap);pdf.setFont("NotoSans","normal");pdf.setFontSize(7);pdf.setTextColor(115,111,104);pdf.text(label,x,rowY);try{const properties=pdf.getImageProperties(data);const scale=Math.min(cellWidth/properties.width,maxHeight/properties.height);const width=properties.width*scale;const height=properties.height*scale;const format=data.startsWith("data:image/png")?"PNG":"JPEG";pdf.addImage(data,format,x,rowY+2,width,height);}catch{/* PDF remains usable if an image format is unsupported. */}});y=rowY+maxHeight+5;}
     text("Исполнение",left,8,"normal",[115,111,104]);text(`${variant?.name||""}${variant?.material?` · ${variant.material}`:""}`,65,9);text(formatCurrency((variant?.price??0)*item.quantity),158,9,"bold");y+=6;
     options.forEach(({group,value})=>{space(7);text(group.name,left,8,"normal",[115,111,104]);text(`${value?.name||""}${value?.brand?` · ${value.brand}`:""}`,65,9);text(value&&value.price_delta>0?`+${formatCurrency(value.price_delta*item.quantity)}`:"включено",158,9,"bold");y+=6;});y+=3;line();
   });
