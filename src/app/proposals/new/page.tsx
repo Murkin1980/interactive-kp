@@ -1,11 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const NewProposalForm = dynamic(
-  () => import("@/features/proposals/new-proposal-form"),
-  { ssr: false }
-);
+import NewProposalForm from "@/features/proposals/new-proposal-form";
 
 export default function NewProposalPage() {
   return <NewProposalForm />;

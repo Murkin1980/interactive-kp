@@ -20,13 +20,20 @@ npm install
 
 1. Создайте проект в [Supabase](https://supabase.com)
 2. В dashboard откройте SQL Editor
-3. Выполните миграцию из `supabase/migrations/001_initial_schema.sql`
-4. Скопируйте `.env.local.example` в `.env.local` и заполните:
+3. Создайте первого пользователя в **Authentication → Users**.
+4. В SQL Editor по порядку и ровно по одному разу выполните миграции:
+   - `supabase/migrations/001_initial_schema.sql`
+   - `supabase/migrations/002_security_hardening.sql`
+   - `supabase/migrations/003_fix_security_and_integrity.sql`
+5. Скопируйте `.env.example` в `.env.local` и заполните:
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-   SUPABASE_SERVICE_ROLE_KEY=eyJ...
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=ваш_anon_или_publishable_key
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
    ```
+
+   `service_role`/secret key приложению не нужен и не должен храниться в
+   клиентском окружении.
 
 ### Запуск
 

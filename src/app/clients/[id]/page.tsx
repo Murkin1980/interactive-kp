@@ -1,11 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const ClientDetailForm = dynamic(
-  () => import("@/features/clients/client-detail-form"),
-  { ssr: false }
-);
+import ClientDetailForm from "@/features/clients/client-detail-form";
 
 export default function ClientDetailPage() {
   return <ClientDetailForm />;

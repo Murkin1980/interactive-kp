@@ -1,11 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const ClientsList = dynamic(
-  () => import("@/features/clients/clients-list"),
-  { ssr: false }
-);
+import ClientsList from "@/features/clients/clients-list";
 
 export default function ClientsPage() {
   return <ClientsList />;

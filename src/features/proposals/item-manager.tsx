@@ -103,6 +103,7 @@ export default function ItemManager({
   /* ─── Item CRUD ─── */
 
   const handleAddItem = async () => {
+    if (readOnly) return;
     if (!itemForm.name.trim()) {
       showError("Введите название позиции");
       return;
@@ -135,6 +136,7 @@ export default function ItemManager({
   };
 
   const handleEditItem = async (itemId: string) => {
+    if (readOnly) return;
     if (!itemForm.name.trim()) {
       showError("Введите название позиции");
       return;
@@ -175,14 +177,11 @@ export default function ItemManager({
   };
 
   const handleDeleteItem = async (itemId: string) => {
+    if (readOnly) return;
     if (!confirm("Удалить позицию и все её варианты?")) return;
     setSubmitting(true);
     try {
-      await supabase
-        .from("kp_item_variants")
-        .delete()
-        .eq("item_id", itemId);
-
+      // Cascade delete is active in DB, so we only need to delete the item
       const { error } = await supabase
         .from("kp_items")
         .delete()
@@ -200,6 +199,7 @@ export default function ItemManager({
   };
 
   const handleMoveItem = async (itemId: string, direction: "up" | "down") => {
+    if (readOnly) return;
     const sorted = [...items].sort(
       (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
     );
@@ -238,6 +238,7 @@ export default function ItemManager({
   /* ─── Variant CRUD ─── */
 
   const handleAddVariant = async (itemId: string) => {
+    if (readOnly) return;
     if (!variantForm.name.trim()) {
       showError("Введите название варианта");
       return;
@@ -246,6 +247,13 @@ export default function ItemManager({
       showError("Цена не может быть отрицательной");
       return;
     }
+
+    const item = items.find((i) => i.id === itemId);
+    if (item && item.variants.length >= MAX_VARIANTS) {
+      showError("Максимум " + MAX_VARIANTS + " варианта на позицию");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { data, error } = await supabase.rpc("add_kp_variant", {
@@ -283,6 +291,7 @@ export default function ItemManager({
     itemId: string,
     variantId: string
   ) => {
+    if (readOnly) return;
     if (!variantForm.name.trim()) {
       showError("Введите название варианта");
       return;
@@ -301,41 +310,32 @@ export default function ItemManager({
           hardware: variantForm.hardware.trim() || null,
           description: variantForm.description.trim() || null,
           price: variantForm.price,
-          is_default: variantForm.is_default,
         })
         .eq("id", variantId);
 
       if (error) throw error;
 
       if (variantForm.is_default) {
-        await supabase
-          .from("kp_item_variants")
-          .update({ is_default: false })
-          .eq("item_id", itemId)
-          .neq("id", variantId);
+        const { error: rpcError } = await supabase.rpc("set_default_kp_variant", {
+          p_item_id: itemId,
+          p_variant_id: variantId,
+        });
+        if (rpcError) throw rpcError;
       }
+
+      // Re-fetch updated variants list to ensure exact state sync
+      const { data: updatedVariants, error: fetchError } = await supabase
+        .from("kp_item_variants")
+        .select("*")
+        .eq("item_id", itemId)
+        .order("sort_order");
+
+      if (fetchError) throw fetchError;
 
       onItemsChange(
         items.map((i) => {
           if (i.id !== itemId) return i;
-          return {
-            ...i,
-            variants: i.variants.map((v) => {
-              if (v.id !== variantId)
-                return variantForm.is_default
-                  ? { ...v, is_default: false }
-                  : v;
-              return {
-                ...v,
-                name: variantForm.name.trim(),
-                material: variantForm.material.trim() || null,
-                hardware: variantForm.hardware.trim() || null,
-                description: variantForm.description.trim() || null,
-                price: variantForm.price,
-                is_default: variantForm.is_default,
-              };
-            }),
-          };
+          return { ...i, variants: updatedVariants || [] };
         })
       );
       resetVariantForm();
@@ -350,20 +350,30 @@ export default function ItemManager({
     itemId: string,
     variantId: string
   ) => {
+    if (readOnly) return;
     if (!confirm("Удалить вариант?")) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from("kp_item_variants")
-        .delete()
-        .eq("id", variantId);
+      const { error } = await supabase.rpc("delete_kp_variant", {
+        p_item_id: itemId,
+        p_variant_id: variantId,
+      });
 
       if (error) throw error;
+
+      // Re-fetch updated variants list to keep UI default flags and deletion correct
+      const { data: updatedVariants, error: fetchError } = await supabase
+        .from("kp_item_variants")
+        .select("*")
+        .eq("item_id", itemId)
+        .order("sort_order");
+
+      if (fetchError) throw fetchError;
 
       onItemsChange(
         items.map((i) =>
           i.id === itemId
-            ? { ...i, variants: i.variants.filter((v) => v.id !== variantId) }
+            ? { ...i, variants: updatedVariants || [] }
             : i
         )
       );
@@ -379,20 +389,15 @@ export default function ItemManager({
     itemId: string,
     variantId: string
   ) => {
+    if (readOnly) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from("kp_item_variants")
-        .update({ is_default: true })
-        .eq("id", variantId);
+      const { error } = await supabase.rpc("set_default_kp_variant", {
+        p_item_id: itemId,
+        p_variant_id: variantId,
+      });
 
       if (error) throw error;
-
-      await supabase
-        .from("kp_item_variants")
-        .update({ is_default: false })
-        .eq("item_id", itemId)
-        .neq("id", variantId);
 
       onItemsChange(
         items.map((i) => {

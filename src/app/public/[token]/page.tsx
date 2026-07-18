@@ -1,11 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const PublicProposalView = dynamic(
-  () => import("@/features/proposals/public-proposal-view"),
-  { ssr: false }
-);
+import PublicProposalView from "@/features/proposals/public-proposal-view";
 
 export default function PublicProposalPage() {
   return <PublicProposalView />;

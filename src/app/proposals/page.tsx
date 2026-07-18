@@ -1,11 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const ProposalsContent = dynamic(
-  () => import("@/features/proposals/proposals-list"),
-  { ssr: false }
-);
+import ProposalsContent from "@/features/proposals/proposals-list";
 
 export default function ProposalsPage() {
   return <ProposalsContent />;

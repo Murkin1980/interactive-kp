@@ -16,6 +16,8 @@ type KpWithVariants = Kp & {
 
 type PublicKpData = Omit<Kp, "client_id" | "public_token" | "owner_id"> & {
   items: (KpItem & { variants: KpItemVariant[] })[];
+  is_expired?: boolean;
+  selected_variants?: Record<string, string>;
 };
 
 export default function PublicProposalView() {
@@ -30,6 +32,7 @@ export default function PublicProposalView() {
   const [confirmed, setConfirmed] = useState(false);
   const [expired, setExpired] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [integrityError, setIntegrityError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -74,8 +77,7 @@ export default function PublicProposalView() {
         const kpData = rpcData as PublicKpData;
 
         // Check expiry
-        const isExpired =
-          kpData.valid_until && new Date(kpData.valid_until) < new Date();
+        const isExpired = kpData.is_expired ?? false;
         if (isExpired) {
           setExpired(true);
         }
@@ -97,22 +99,35 @@ export default function PublicProposalView() {
 
         // For confirmed KPs, try to restore previously selected variants
         let initialVariants: Record<string, string> = {};
+        let validationFailed = false;
 
         if (kpData.status === "confirmed") {
-          const { data: confirmationData } = await supabase
-            .from("kp_confirmations")
-            .select("selected_variants")
-            .eq("kp_id", kpData.id)
-            .order("confirmed_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (confirmationData?.selected_variants) {
-            initialVariants = confirmationData.selected_variants as Record<
+          if (kpData.selected_variants) {
+            initialVariants = kpData.selected_variants as Record<
               string,
               string
             >;
+
+            // Validate integrity: every item must have a selection in initialVariants, and that variant must exist in item.variants
+            for (const item of typedItems) {
+              const selectedVarId = initialVariants[item.id];
+              const variantExists = item.variants.some((v) => v.id === selectedVarId);
+              if (!selectedVarId || !variantExists) {
+                validationFailed = true;
+                break;
+              }
+            }
+          } else {
+            validationFailed = true;
           }
+        }
+
+        if (validationFailed) {
+          if (!cancelled) {
+            setIntegrityError(true);
+            setLoading(false);
+          }
+          return;
         }
 
         // Fall back to default variants
@@ -240,6 +255,24 @@ export default function PublicProposalView() {
             <p className="text-sm text-stone-500">
               Предложение не найдено или ссылка устарела. Пожалуйста,
               обратитесь к вашему менеджеру за актуальной ссылкой.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (integrityError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-stone-100 px-4">
+        <Card className="w-full max-w-md text-center">
+          <CardContent>
+            <div className="mb-4 text-5xl">⚠️</div>
+            <h1 className="mb-2 text-xl font-bold text-stone-800">
+              Ошибка целостности данных
+            </h1>
+            <p className="text-sm text-stone-500">
+              Выбранные ранее варианты комплектации для этого предложения не найдены или повреждены. Пожалуйста, обратитесь к менеджеру.
             </p>
           </CardContent>
         </Card>

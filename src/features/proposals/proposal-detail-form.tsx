@@ -146,11 +146,14 @@ export default function ProposalDetailForm() {
     const { error } = await supabase.from("kps").delete().eq("id", id);
     if (!error) {
       router.push("/proposals");
+      return;
     }
+    setErrors({ root: "Ошибка удаления: " + error.message });
   };
 
   const handlePublish = async () => {
     if (!kp) return;
+    setErrors({});
     const { error } = await supabase
       .from("kps")
       .update({ status: "sent" })
@@ -158,7 +161,9 @@ export default function ProposalDetailForm() {
 
     if (!error) {
       setKp({ ...kp, status: "sent" });
+      return;
     }
+    setErrors({ root: "Не удалось опубликовать КП: " + error.message });
   };
 
   const handleDuplicate = async () => {

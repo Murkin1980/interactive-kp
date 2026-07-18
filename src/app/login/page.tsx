@@ -1,11 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const LoginForm = dynamic(
-  () => import("@/features/auth/login-form"),
-  { ssr: false }
-);
+import LoginForm from "@/features/auth/login-form";
 
 export default function LoginPage() {
   return <LoginForm />;
