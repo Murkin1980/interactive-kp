@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,7 +110,13 @@ export default function PublicProposalView() {
         }
 
         // Build typed items with variants
-        const typedItems = (kpData.items ?? []) as PublicItem[];
+        const typedItems = await Promise.all(((kpData.items ?? []) as PublicItem[]).map(async (item) => {
+          const path = item.original_image_url || item.image_url;
+          if (!path || /^https?:\/\//.test(path)) return item;
+          const { data } = await supabase.storage.from("kp-media").createSignedUrl(path, 3600);
+          if (!data?.signedUrl) return item;
+          return { ...item, image_url: data.signedUrl, original_image_url: data.signedUrl };
+        }));
 
         // For confirmed KPs, try to restore previously selected variants
         let initialVariants: Record<string, string> = {};
@@ -477,6 +484,16 @@ export default function PublicProposalView() {
                   key={item.id}
                   className="space-y-3 rounded-lg border border-stone-200 p-4"
                 >
+                  {(item.original_image_url || item.image_url) && (
+                    <Image
+                      unoptimized
+                      src={item.original_image_url || item.image_url || ""}
+                      alt={`Визуализация: ${item.name}`}
+                      width={1200}
+                      height={800}
+                      className="max-h-[520px] w-full rounded-xl bg-stone-100 object-contain"
+                    />
+                  )}
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="font-semibold text-stone-800">

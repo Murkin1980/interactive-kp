@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
+import Image from "next/image";
+import { ImagePlus, Loader2, Trash2, Upload } from "lucide-react";
 import type { KpItem, KpItemVariant } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -61,7 +63,7 @@ export default function ItemManager({
   onItemsChange,
   readOnly = false,
 }: ItemManagerProps) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
@@ -75,6 +77,24 @@ export default function ItemManager({
     useState<VariantFormState>(EMPTY_VARIANT_FORM);
 
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const next: Record<string, string> = {};
+      await Promise.all(items.map(async (item) => {
+        const path = item.original_image_url || item.image_url;
+        if (!path) return;
+        if (/^https?:\/\//.test(path)) { next[item.id] = path; return; }
+        const { data } = await supabase.storage.from("kp-media").createSignedUrl(path, 3600);
+        if (data?.signedUrl) next[item.id] = data.signedUrl;
+      }));
+      if (!cancelled) setPreviewUrls(next);
+    })();
+    return () => { cancelled = true; };
+  }, [items, supabase]);
 
   const getMaxSortOrder = useCallback(
     () => (items.length > 0 ? Math.max(...items.map((i) => i.sort_order ?? 0)) + 1 : 0),
@@ -100,6 +120,41 @@ export default function ItemManager({
 
   const getErrorMessage = (err: unknown): string =>
     err instanceof Error ? err.message : String(err);
+
+  const handlePhotoUpload = async (itemId: string, file: File) => {
+    if (readOnly) return;
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) { showError("Загрузите JPG, PNG или WebP."); return; }
+    if (file.size > 10 * 1024 * 1024) { showError("Файл должен быть не больше 10 МБ."); return; }
+    setUploadingItemId(itemId);
+    try {
+      const { data: kp, error: kpError } = await supabase.from("kps").select("public_token").eq("id", kpId).single();
+      if (kpError) throw kpError;
+      const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const path = `${kpId}/${kp.public_token}/items/${itemId}-${Date.now()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from("kp-media").upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const previous = items.find((item) => item.id === itemId)?.original_image_url;
+      const { error: updateError } = await supabase.from("kp_items").update({ original_image_url: path, image_url: path }).eq("id", itemId);
+      if (updateError) { await supabase.storage.from("kp-media").remove([path]); throw updateError; }
+      if (previous && !/^https?:\/\//.test(previous)) await supabase.storage.from("kp-media").remove([previous]);
+      onItemsChange(items.map((item) => item.id === itemId ? { ...item, original_image_url: path, image_url: path } : item));
+    } catch (error) { showError(getErrorMessage(error) || "Не удалось загрузить фотографию"); }
+    finally { setUploadingItemId(null); }
+  };
+
+  const handlePhotoDelete = async (itemId: string) => {
+    const item = items.find((candidate) => candidate.id === itemId); const path = item?.original_image_url || item?.image_url;
+    if (!item || !path || readOnly) return;
+    setUploadingItemId(itemId);
+    try {
+      const { error } = await supabase.from("kp_items").update({ original_image_url: null, image_url: null }).eq("id", itemId);
+      if (error) throw error;
+      if (!/^https?:\/\//.test(path)) await supabase.storage.from("kp-media").remove([path]);
+      onItemsChange(items.map((candidate) => candidate.id === itemId ? { ...candidate, original_image_url: null, image_url: null } : candidate));
+    } catch (error) { showError(getErrorMessage(error) || "Не удалось удалить фотографию"); }
+    finally { setUploadingItemId(null); }
+  };
 
   /* ─── Item CRUD ─── */
 
@@ -734,6 +789,29 @@ export default function ItemManager({
                     "Сохранить"
                   )
                 : null}
+
+              {!isEditing && (
+                <div className="mb-4 rounded-xl border border-dashed border-stone-300 bg-stone-50 p-3 transition-colors hover:border-amber-400">
+                  {previewUrls[item.id] ? (
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <Image unoptimized src={previewUrls[item.id]} alt={`Фото: ${item.name}`} width={320} height={224} className="h-28 w-full rounded-lg object-cover sm:w-40" />
+                      <div className="flex flex-1 flex-wrap gap-2">
+                        {!readOnly && <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors hover:bg-amber-700">
+                          <Upload size={16} /> Заменить фото
+                          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingItemId===item.id} onChange={(event)=>{const file=event.target.files?.[0];if(file) void handlePhotoUpload(item.id,file);event.target.value="";}} />
+                        </label>}
+                        {!readOnly && <Button type="button" variant="secondary" onClick={()=>void handlePhotoDelete(item.id)} disabled={uploadingItemId===item.id} className="gap-2 transition-colors hover:bg-red-50 hover:text-red-700"><Trash2 size={16}/>Удалить</Button>}
+                      </div>
+                    </div>
+                  ) : (
+                    <label className={`flex min-h-24 items-center justify-center gap-3 text-sm text-stone-600 ${readOnly?"cursor-default":"cursor-pointer"}`}>
+                      {uploadingItemId===item.id?<Loader2 size={22} className="animate-spin text-amber-600"/>:<ImagePlus size={22} className="text-amber-700"/>}
+                      <span><b className="block text-stone-800">{uploadingItemId===item.id?"Загрузка...":"Добавить фотографию или эскиз"}</b>JPG, PNG или WebP до 10 МБ</span>
+                      {!readOnly && <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingItemId===item.id} onChange={(event)=>{const file=event.target.files?.[0];if(file) void handlePhotoUpload(item.id,file);event.target.value="";}}/>}
+                    </label>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2 mt-2">
                 {item.variants.length > 0 && (
