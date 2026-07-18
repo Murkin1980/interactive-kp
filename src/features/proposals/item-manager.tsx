@@ -582,16 +582,20 @@ export default function ItemManager({
     onCancel: () => void,
     label: string
   ) => (
-    <div className="space-y-3 p-3 rounded-lg bg-amber-50/50 border border-amber-100">
+    <div className="space-y-4 border border-[#c8d6db] bg-[#f6f8f8] p-4">
+      <div className="border-l-2 border-[#c2a46d] pl-3">
+        <p className="text-sm font-semibold text-[#14263d]">Готовая цена мебели в этом исполнении</p>
+        <p className="mt-1 text-xs leading-5 text-slate-600">Введите уже рассчитанную вами стоимость. Сервис не рассчитывает себестоимость — он показывает клиенту готовые варианты на выбор.</p>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="block text-xs font-medium text-stone-600 mb-1">
-            Название *
+            Название исполнения *
           </label>
           <Input
             value={form.name}
             onChange={(e) => onChange({ ...form, name: e.target.value })}
-            placeholder="Название варианта"
+            placeholder="Например: Базовый ЛДСП"
             className="border-stone-200 focus:border-amber-400 focus:ring-amber-400 text-sm"
           />
         </div>
@@ -604,7 +608,7 @@ export default function ItemManager({
             onChange={(e) =>
               onChange({ ...form, material: e.target.value })
             }
-            placeholder="ДСП, МДФ..."
+            placeholder="Например: ЛДСП Egger"
             className="border-stone-200 focus:border-amber-400 focus:ring-amber-400 text-sm"
           />
         </div>
@@ -623,7 +627,7 @@ export default function ItemManager({
         </div>
         <div>
           <label className="block text-xs font-medium text-stone-600 mb-1">
-            Цена *
+            Готовая цена позиции, ₸ *
           </label>
           <Input
             type="number"
@@ -636,8 +640,8 @@ export default function ItemManager({
                 price: parseFloat(e.target.value) || 0,
               })
             }
-            placeholder="0.00"
-            className="border-stone-200 focus:border-amber-400 focus:ring-amber-400 text-sm"
+            placeholder="Например: 1 500 000"
+            className="border-[#77afc5] bg-white text-base font-semibold text-[#14263d] focus:border-[#14263d] focus:ring-[#77afc5]"
           />
         </div>
         <div className="flex items-end pb-1">
@@ -650,7 +654,7 @@ export default function ItemManager({
               }
               className="rounded border-stone-300 text-amber-500 focus:ring-amber-400"
             />
-            По умолчанию
+            Показывать клиенту первым
           </label>
         </div>
         <div className="col-span-2">
@@ -662,7 +666,7 @@ export default function ItemManager({
             onChange={(e) =>
               onChange({ ...form, description: e.target.value })
             }
-            placeholder="Описание варианта..."
+            placeholder="Например: фасады ЛДСП, корпус ЛДСП, фурнитура стандарт"
             rows={2}
             className="border-stone-200 focus:border-amber-400 focus:ring-amber-400 text-sm resize-none"
           />
@@ -831,10 +835,22 @@ export default function ItemManager({
                 </div>
               )}
 
+              {!isEditing && (
+                <div className="mb-5 border border-[#c8d6db] bg-[#f3efe4] p-4">
+                  <p className="text-sm font-semibold text-[#14263d]">Как сформировать предложение клиенту</p>
+                  <ol className="mt-2 grid gap-2 text-xs leading-5 text-slate-600 md:grid-cols-3">
+                    <li><b className="text-[#702f35]">1. Цена позиции.</b> Укажите готовую стоимость мебели.</li>
+                    <li><b className="text-[#702f35]">2. Исполнения.</b> Добавьте ЛДСП, крашеные фасады или шпон с отдельными ценами.</li>
+                    <li><b className="text-[#702f35]">3. Дополнения.</b> Ниже добавьте подсветку, камень и другие доплаты.</li>
+                  </ol>
+                </div>
+              )}
+
               <div className="space-y-2 mt-2">
                 {item.variants.length > 0 && (
-                  <div className="text-xs font-medium text-stone-500 uppercase tracking-wide">
-                    Варианты
+                  <div>
+                    <div className="text-sm font-semibold text-[#14263d]">Цена позиции и варианты исполнения</div>
+                    <p className="text-xs text-slate-500">Каждое исполнение — отдельная готовая комплектация со своей полной ценой.</p>
                   </div>
                 )}
 
@@ -971,22 +987,24 @@ export default function ItemManager({
               </div>
 
               {!isEditing && !isAddingVariant && !readOnly && (
-                <div className="mt-3 pt-3 border-t border-stone-100 flex justify-center">
+                <div className="mt-3 flex justify-center border-t border-[#c8d6db] pt-3">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 text-xs"
+                    className="min-h-11 border border-[#14263d] px-4 text-sm font-semibold text-[#14263d] hover:bg-[#14263d] hover:text-white"
                     disabled={
                       submitting || item.variants.length >= MAX_VARIANTS
                     }
                     onClick={() => {
                       setAddingVariantForItemId(item.id);
                       setEditingVariantId(null);
-                      setVariantForm({ ...EMPTY_VARIANT_FORM });
+                      setVariantForm(item.variants.length === 0
+                        ? { ...EMPTY_VARIANT_FORM, name: "Основное исполнение", is_default: true }
+                        : { ...EMPTY_VARIANT_FORM });
                     }}
                   >
-                    + Добавить вариант
+                    {item.variants.length === 0 ? "+ Указать готовую цену позиции" : "+ Добавить другое исполнение и цену"}
                     {item.variants.length >= MAX_VARIANTS
                       ? ` (макс. ${MAX_VARIANTS})`
                       : ` (${item.variants.length}/${MAX_VARIANTS})`}

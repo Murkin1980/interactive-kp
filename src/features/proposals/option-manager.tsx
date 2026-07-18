@@ -73,9 +73,12 @@ export default function OptionManager({ itemId, readOnly }: { itemId: string; re
   };
 
   return (
-    <section className="mt-5 border-t border-stone-200 pt-4">
+    <section className="mt-5 border-t border-[#c8d6db] pt-5">
       <div className="mb-3 flex items-center justify-between">
-        <div><h4 className="font-semibold text-stone-800">Комплектация</h4><p className="text-xs text-stone-500">Фасады, фурнитура, столешница и другие опции</p></div>
+        <div><h4 className="font-semibold text-[#14263d]">Дополнительный выбор клиента</h4><p className="text-xs text-slate-500">Опции и доплаты сверх готовой цены позиции</p></div>
+      </div>
+      <div className="mb-4 bg-[#e6edef] p-3 text-xs leading-5 text-[#405465]">
+        <b>Пример:</b> создайте группу «Цвет фасадов», внутри — «Белый» без доплаты и «Красный» с доплатой. Для подсветки можно добавить «Без подсветки» и «С подсветкой +80 000 ₸».
       </div>
       <div className="space-y-3">
         {groups.map((group) => {
@@ -84,15 +87,15 @@ export default function OptionManager({ itemId, readOnly }: { itemId: string; re
             <div className="flex items-center justify-between"><b className="text-sm text-stone-700">{group.name}</b>{!readOnly && <button type="button" onClick={() => void removeGroup(group.id)} className="text-xs text-red-500 hover:text-red-700">Удалить</button>}</div>
             <div className="mt-2 flex flex-wrap gap-2">{group.values.sort((a,b) => a.sort_order-b.sort_order).map((value) => <span key={value.id} className={`rounded-full border px-3 py-1.5 text-xs ${value.is_default ? "border-amber-300 bg-amber-50" : "border-stone-200 bg-white"}`}>{value.name}{value.brand ? ` · ${value.brand}` : ""}{value.price_delta > 0 ? ` +${money.format(value.price_delta)} ₸` : ""}</span>)}</div>
             {!readOnly && <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_130px_auto]">
-              <Input placeholder="Вариант" value={draft.name} onChange={(e) => setValueDrafts((c) => ({ ...c, [group.id]: { ...draft, name: e.target.value } }))} />
-              <Input placeholder="Бренд" value={draft.brand} onChange={(e) => setValueDrafts((c) => ({ ...c, [group.id]: { ...draft, brand: e.target.value } }))} />
-              <Input type="number" min="0" placeholder="Доплата" value={draft.price} onChange={(e) => setValueDrafts((c) => ({ ...c, [group.id]: { ...draft, price: e.target.value } }))} />
-              <Button type="button" size="sm" disabled={busy} onClick={() => void addValue(group)}>+Вариант</Button>
+              <Input placeholder="Например: Красные фасады" value={draft.name} onChange={(e) => setValueDrafts((c) => ({ ...c, [group.id]: { ...draft, name: e.target.value } }))} />
+              <Input placeholder="Материал или бренд" value={draft.brand} onChange={(e) => setValueDrafts((c) => ({ ...c, [group.id]: { ...draft, brand: e.target.value } }))} />
+              <Input type="number" min="0" placeholder="Доплата, ₸" value={draft.price} onChange={(e) => setValueDrafts((c) => ({ ...c, [group.id]: { ...draft, price: e.target.value } }))} />
+              <Button type="button" size="sm" disabled={busy} onClick={() => void addValue(group)}>Добавить</Button>
             </div>}
           </div>;
         })}
       </div>
-      {!readOnly && <div className="mt-3 flex gap-2"><Input placeholder="Новая группа, например «Фурнитура»" value={groupName} onChange={(e) => setGroupName(e.target.value)} /><Button type="button" variant="secondary" disabled={busy || !groupName.trim()} onClick={() => void addGroup()}>Добавить группу</Button></div>}
+      {!readOnly && <div className="mt-3 flex gap-2"><Input placeholder="Что выбирает клиент? Например: Цвет фасадов" value={groupName} onChange={(e) => setGroupName(e.target.value)} /><Button type="button" variant="secondary" disabled={busy || !groupName.trim()} onClick={() => void addGroup()}>Добавить выбор</Button></div>}
     </section>
   );
 }
