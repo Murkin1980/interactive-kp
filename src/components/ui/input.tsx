@@ -21,7 +21,7 @@ export function Input({ className, label, error, id, ...props }: InputProps) {
         className={cn(
           "flex h-10 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm",
           "placeholder:text-stone-400",
-          "focus:outline-none focus:ring-2 focus:ring-amber-600 focus:border-transparent",
+          "focus:outline-none focus:ring-2 focus:ring-[#77afc5] focus:border-transparent",
           "disabled:cursor-not-allowed disabled:opacity-50",
           error && "border-red-500 focus:ring-red-500",
           className

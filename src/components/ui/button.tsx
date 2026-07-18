@@ -18,9 +18,9 @@ export function Button({
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
         "disabled:pointer-events-none disabled:opacity-50",
         {
-          "bg-amber-600 text-white hover:bg-amber-700 focus-visible:ring-amber-600":
+          "bg-[#14263d] text-white hover:bg-[#263f55] focus-visible:ring-[#14263d]":
             variant === "primary",
-          "bg-stone-200 text-stone-800 hover:bg-stone-300 focus-visible:ring-stone-400":
+          "border border-[#c8d6db] bg-[#f6f8f8] text-[#14263d] hover:bg-[#dde7ea] focus-visible:ring-[#77afc5]":
             variant === "secondary",
           "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-600":
             variant === "danger",

@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { FileText, LayoutDashboard, LogOut, Settings, UsersRound } from "lucide-react";
 
 const navigation = [
-  { name: "Главная", href: "/dashboard" },
-  { name: "Клиенты", href: "/clients" },
-  { name: "КП", href: "/proposals" },
+  { name: "Обзор", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Клиенты", href: "/clients", icon: UsersRound },
+  { name: "Коммерческие предложения", href: "/proposals", icon: FileText },
+  { name: "Настройки", href: "/settings", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -22,10 +24,11 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex h-full w-64 flex-col border-r border-stone-200 bg-stone-50">
-      <div className="flex h-16 items-center border-b border-stone-200 px-6">
-        <Link href="/dashboard" className="text-lg font-semibold text-stone-800">
-          Интерактивные КП
+    <div className="hidden h-full w-72 flex-col border-r border-[#29455b] bg-[#14263d] text-white md:flex">
+      <div className="flex h-20 items-center border-b border-white/10 px-6">
+        <Link href="/dashboard" className="leading-tight">
+          <span className="block text-lg font-semibold tracking-wide">INTERACTIVE KP</span>
+          <span className="text-[10px] uppercase tracking-[.24em] text-[#c2a46d]">Furniture proposal studio</span>
         </Link>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
@@ -37,22 +40,24 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 border-l-2 px-3 py-3 text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-amber-100 text-amber-900"
-                  : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  ? "border-[#c2a46d] bg-white/10 text-white"
+                  : "border-transparent text-[#c8d6db] hover:border-white/30 hover:bg-white/5 hover:text-white"
               )}
             >
+              <item.icon size={18} strokeWidth={1.6}/>
               {item.name}
             </Link>
           );
         })}
       </nav>
-      <div className="border-t border-stone-200 p-3">
+      <div className="border-t border-white/10 p-3">
         <button
           onClick={handleSignOut}
-          className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+          className="flex w-full items-center gap-3 px-3 py-3 text-sm font-medium text-[#c8d6db] transition-colors hover:bg-white/5 hover:text-white"
         >
+          <LogOut size={18} strokeWidth={1.6}/>
           Выход
         </button>
       </div>

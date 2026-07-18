@@ -35,6 +35,13 @@ type ApprovalSnapshotData = {
   }>;
 };
 
+type ProposalBranding = {
+  company_name: string;
+  logo_url: string | null;
+  watermark_text: string;
+  primary_color: string;
+};
+
 export default function PublicProposalView() {
   const params = useParams();
   const token = params?.token as string;
@@ -55,6 +62,12 @@ export default function PublicProposalView() {
   const [confirming, setConfirming] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [branding, setBranding] = useState<ProposalBranding>({
+    company_name: "ГРАНД МЕБЕЛЬ",
+    logo_url: null,
+    watermark_text: "ГРАНД МЕБЕЛЬ",
+    primary_color: "#14263D",
+  });
 
   const [formData, setFormData] = useState({
     client_name: "",
@@ -78,6 +91,8 @@ export default function PublicProposalView() {
         "get_public_kp",
         { p_token: token }
       );
+      const { data: brandingData } = await supabase.rpc("get_public_kp_branding", { p_token: token });
+      if (!cancelled && brandingData) setBranding(brandingData as ProposalBranding);
 
       if (!cancelled && rpcError) {
         setLoadError("Ошибка загрузки: " + rpcError.message);
@@ -317,8 +332,12 @@ export default function PublicProposalView() {
       pdf.addFileToVFS("NotoSans-Bold.ttf", arrayBufferToBase64(boldFont));
       pdf.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
       pdf.addFont("NotoSans-Bold.ttf", "NotoSans", "bold");
-      const pdfImages = await loadPdfImages(proposal);
-      renderEstimatePdf(pdf, proposal, selectedVariants, selectedOptions, calculation, revision, pdfImages);
+      const [pdfImages, logoDataUrl] = await Promise.all([
+        loadPdfImages(proposal),
+        branding.logo_url ? imageUrlToDataUrl(branding.logo_url).catch(() => undefined) : Promise.resolve(undefined),
+      ]);
+      renderEstimatePdf(pdf, proposal, selectedVariants, selectedOptions, calculation, revision, pdfImages, branding, logoDataUrl);
+      applyPdfProtection(pdf, proposal, revision, branding.watermark_text || branding.company_name);
       const blob = pdf.output("blob");
       const path = `${proposal.id}/${token}/approval-v${revision}.pdf`;
       const { error: uploadError } = await supabase.storage.from("kp-media").upload(path, blob, { contentType: "application/pdf", upsert: false });
@@ -835,12 +854,15 @@ async function loadPdfImages(proposal: KpWithVariants): Promise<PdfItemImages> {
   return Object.fromEntries(entries);
 }
 
-function renderEstimatePdf(pdf: JsPdf, proposal: KpWithVariants, selectedVariants: Record<string,string>, selectedOptions: Record<string,string>, calculation: {subtotal:number;discountAmount:number;total:number;advance:number;balance:number}, revision: number, pdfImages: PdfItemImages) {
+function renderEstimatePdf(pdf: JsPdf, proposal: KpWithVariants, selectedVariants: Record<string,string>, selectedOptions: Record<string,string>, calculation: {subtotal:number;discountAmount:number;total:number;advance:number;balance:number}, revision: number, pdfImages: PdfItemImages, branding: ProposalBranding, logoDataUrl?: string) {
   const left=16, right=194, pageBottom=278; let y=18;
   const text=(value:string,x:number,size=10,style:"normal"|"bold"="normal",color:[number,number,number]=[35,35,31])=>{pdf.setFont("NotoSans",style);pdf.setFontSize(size);pdf.setTextColor(...color);pdf.text(value,x,y);};
   const line=()=>{pdf.setDrawColor(205,198,184);pdf.line(left,y,right,y);y+=5;};
   const space=(needed:number)=>{if(y+needed>pageBottom){pdf.addPage();y=18;}};
-  text("ГРАНД МЕБЕЛЬ",left,9,"bold",[155,104,69]); text("ФИНАЛЬНАЯ СМЕТА",140,9,"normal",[90,87,80]); y+=10;
+  if (logoDataUrl) {
+    try { pdf.addImage(logoDataUrl, logoDataUrl.startsWith("data:image/png") ? "PNG" : "JPEG", left, 11, 26, 10, undefined, "FAST"); } catch { /* Fall back to the company name below. */ }
+  }
+  text(branding.company_name.toLocaleUpperCase("ru-RU"), logoDataUrl ? 46 : left, 9,"bold",[20,58,86]); text("ФИНАЛЬНАЯ СМЕТА",140,9,"normal",[90,87,80]); y+=10;
   text(proposal.project_name,left,20,"bold"); y+=9; text(`${proposal.number} · редакция ${revision}`,left,9); text(proposal.client_name,140,9,"bold"); y+=8; line();
   proposal.items.forEach((item,index)=>{space(40);const variant=item.variants.find(v=>v.id===selectedVariants[item.id]);const options=(item.option_groups??[]).map(group=>({group,value:group.values.find(v=>v.id===selectedOptions[group.id])})).filter(entry=>entry.value);const itemTotal=((variant?.price??0)+options.reduce((sum,e)=>sum+(e.value?.price_delta??0),0))*item.quantity;
     text(`${index+1}. ${item.name}`,left,13,"bold"); text(formatCurrency(itemTotal),158,11,"bold"); y+=7;text(`${item.dimensions||"Размер по проекту"} · ${item.quantity} шт.`,left,8,"normal",[115,111,104]);y+=7;
@@ -851,6 +873,43 @@ function renderEstimatePdf(pdf: JsPdf, proposal: KpWithVariants, selectedVariant
   });
   space(55);y+=3;text("Сумма",105,9);text(formatCurrency(calculation.subtotal),158,9,"bold");y+=7;if(calculation.discountAmount>0){text("Скидка",105,9);text(`-${formatCurrency(calculation.discountAmount)}`,158,9,"bold",[30,120,70]);y+=7;}pdf.setDrawColor(35,35,31);pdf.line(105,y,194,y);y+=7;text("ИТОГО",105,12,"bold");text(formatCurrency(calculation.total),158,12,"bold");y+=8;text(`Аванс ${proposal.advance_percent}%`,105,9);text(formatCurrency(calculation.advance),158,9,"bold");y+=7;text("Остаток",105,9);text(formatCurrency(calculation.balance),158,9,"bold");y+=13;
   space(35);pdf.setFillColor(248,246,240);pdf.rect(left,y,right-left,23,"F");y+=7;const consent=pdf.splitTextToSize("Клиент проверил выбранную комплектацию и согласился с окончательной сметой.",165);pdf.setFont("NotoSans","normal");pdf.setFontSize(8);pdf.text(consent,left+4,y);y+=20;text(`Дата формирования: ${new Date().toLocaleString("ru-RU")}`,left,7,"normal",[115,111,104]);
+}
+
+/**
+ * Adds print-safe ownership marks after all estimate pages have been rendered.
+ * The pale vector watermark survives browser printing and PDF re-export without
+ * making furniture images, specifications, or prices difficult to read.
+ */
+function applyPdfProtection(
+  pdf: JsPdf,
+  proposal: KpWithVariants,
+  revision: number,
+  companyName: string
+) {
+  const pageCount = pdf.getNumberOfPages();
+  const watermark = companyName.toLocaleUpperCase("ru-RU");
+  const footer = `${proposal.number} · редакция ${revision} · ${proposal.client_name}`;
+
+  for (let page = 1; page <= pageCount; page += 1) {
+    pdf.setPage(page);
+
+    // A vector watermark is more reliable in print than CSS transparency.
+    pdf.setFont("NotoSans", "bold");
+    pdf.setFontSize(31);
+    pdf.setTextColor(232, 235, 238);
+    pdf.text(watermark, 105, 151, { align: "center", angle: 34 });
+
+    pdf.setDrawColor(198, 164, 109);
+    pdf.setLineWidth(0.25);
+    pdf.line(16, 286, 194, 286);
+
+    pdf.setFont("NotoSans", "normal");
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(92, 100, 106);
+    pdf.text(footer, 16, 291);
+    pdf.text("Персональное коммерческое предложение", 105, 291, { align: "center" });
+    pdf.text(`${page} / ${pageCount}`, 194, 291, { align: "right" });
+  }
 }
 
 // Client-side calculation for display purposes
