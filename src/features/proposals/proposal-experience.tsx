@@ -104,7 +104,7 @@ export default function ProposalExperience(props: Props) {
                 {group.values.map((value) => {
                   const active=props.selectedOptions[group.id]===value.id;
                   return <button key={value.id} type="button" disabled={props.confirmed || props.expired} onClick={()=>props.onOptionChange(group.id,value.id)} aria-pressed={active} className={`hardware-tile ${active?"hardware-tile-active":""}`}>
-                    <span className="hardware-dot"/><span className="min-w-0 flex-1 text-left"><b className="block text-sm">{value.name}</b>{value.brand&&<small className="block truncate">{value.brand}</small>}</span><strong className={value.price_delta > 0 ? "text-sm text-[#702f35]" : "text-xs text-[#687985]"}>{value.price_delta > 0 ? `+${formatCurrency(value.price_delta)}` : "Без доплаты"}</strong>{active&&<Check size={16}/>} 
+                    <span className="hardware-dot"/><span className="min-w-0 flex-1 text-left"><b className="block text-sm">{value.name}</b>{value.brand&&<small className="block truncate">{value.brand}</small>}</span><strong className={value.price_delta > 0 ? "text-sm text-[#702f35]" : "text-xs text-[#687985]"}>{value.price_delta > 0 ? `+${formatCurrency(value.price_delta)}` : "Без доплаты"}</strong>{active&&<Check size={16}/>}
                   </button>;
                 })}
               </ChoiceRail>)}
