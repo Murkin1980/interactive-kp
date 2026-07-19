@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Interactive KP — демо кабинета</title>
+  <style>
+    :root{color-scheme:light;--ink:#14263d;--wine:#702f35;--paper:#f3efe4;--gold:#c2a46d}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,Arial,sans-serif}
+    header{padding:48px clamp(20px,6vw,80px) 28px;border-bottom:1px solid #14263d26;background:#fbf7ee}
+    h1{margin:8px 0;font:500 clamp(36px,6vw,68px)/1.02 Georgia,serif;letter-spacing:-.035em}
+    header p{max-width:720px;color:#625c53;line-height:1.65}.eyebrow{color:var(--wine);font-size:12px;font-weight:700;letter-spacing:.22em;text-transform:uppercase}
+    main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:24px;padding:32px clamp(20px,6vw,80px) 64px}
+    article{border:1px solid #14263d24;background:#fffdf8;padding:18px;box-shadow:0 20px 60px #14263d0d}
+    h2{margin:4px 0 7px;font:500 27px/1.15 Georgia,serif}article p{margin:0 0 16px;color:#71695f;font-size:14px;line-height:1.55}
+    video{display:block;width:100%;aspect-ratio:16/10;background:#14263d;object-fit:contain}footer{padding:0 clamp(20px,6vw,80px) 36px;color:#71695f;font-size:13px}
+  </style>
+</head>
+<body>
+  <header><div class="eyebrow">Interactive KP · учебный центр</div><h1>Короткие демо кабинета</h1><p>Обзор основных рабочих разделов мебельщика. Видео записаны в реальном production-интерфейсе; они не выполняют необратимых действий и не изменяют клиентские данные.</p></header>
+  <main>
+    <article><h2>1. Обзор</h2><p>Главный экран, показатели и быстрый переход к рабочим действиям.</p><video controls preload="metadata" src="recordings/01-overview.webm"></video></article>
+    <article><h2>2. Клиенты</h2><p>Список клиентов и переход к созданию или просмотру карточки.</p><video controls preload="metadata" src="recordings/02-clients.webm"></video></article>
+    <article><h2>3. Коммерческие предложения</h2><p>Список КП, статусы, создание и открытие клиентского предложения.</p><video controls preload="metadata" src="recordings/03-proposals.webm"></video></article>
+    <article><h2>4. Настройки</h2><p>Название компании, логотип, фирменный цвет и защита PDF.</p><video controls preload="metadata" src="recordings/04-settings.webm"></video></article>
+  </main>
+  <footer>Следующий пакет: подробные сценарии «Создать клиента», «Создать КП», «Опубликовать и отправить» и «Подтверждение клиентом».</footer>
+</body>
+</html>
