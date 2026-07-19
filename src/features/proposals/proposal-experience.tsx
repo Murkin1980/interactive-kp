@@ -33,6 +33,14 @@ export default function ProposalExperience(props: Props) {
   const { proposal, calculation } = props;
   const firstItem = proposal.items[0];
   const hero = firstItem?.original_image_url || firstItem?.image_url;
+  const selectedAddOns = proposal.items.flatMap((item) =>
+    (item.option_groups || []).flatMap((group) => {
+      const value = group.values.find((candidate) => candidate.id === props.selectedOptions[group.id]);
+      return value && value.price_delta > 0
+        ? [{ id: `${group.id}-${value.id}`, name: value.name, total: value.price_delta * item.quantity }]
+        : [];
+    })
+  );
 
   return (
     <main className="proposal-canvas min-h-screen overflow-hidden text-[#28251f]">
@@ -95,8 +103,8 @@ export default function ProposalExperience(props: Props) {
               {(item.option_groups || []).map((group) => <ChoiceRail key={group.id} title={group.name} compact>
                 {group.values.map((value) => {
                   const active=props.selectedOptions[group.id]===value.id;
-                  return <button key={value.id} type="button" disabled={props.confirmed || props.expired} onClick={()=>props.onOptionChange(group.id,value.id)} className={`hardware-tile ${active?"hardware-tile-active":""}`}>
-                    <span className="hardware-dot"/><span><b className="block text-sm">{value.name}</b><small>{value.brand || (value.price_delta ? `+${formatCurrency(value.price_delta)}` : "Включено")}</small></span>{active&&<Check size={16}/>} 
+                  return <button key={value.id} type="button" disabled={props.confirmed || props.expired} onClick={()=>props.onOptionChange(group.id,value.id)} aria-pressed={active} className={`hardware-tile ${active?"hardware-tile-active":""}`}>
+                    <span className="hardware-dot"/><span className="min-w-0 flex-1 text-left"><b className="block text-sm">{value.name}</b>{value.brand&&<small className="block truncate">{value.brand}</small>}</span><strong className={value.price_delta > 0 ? "text-sm text-[#702f35]" : "text-xs text-[#687985]"}>{value.price_delta > 0 ? `+${formatCurrency(value.price_delta)}` : "Без доплаты"}</strong>{active&&<Check size={16}/>} 
                   </button>;
                 })}
               </ChoiceRail>)}
@@ -113,6 +121,7 @@ export default function ProposalExperience(props: Props) {
         </div>
         <aside className="bg-[#e6edef]/85 p-6 shadow-[-20px_0_60px_rgba(20,38,61,.10)] md:p-9">
           <p className="text-sm text-[#71695f]">Итого</p><p className="mt-2 font-serif text-5xl">{calculation ? formatCurrency(calculation.total) : "—"}</p>
+          {selectedAddOns.length > 0 && <div className="mt-5 border-l-2 border-[#c2a46d] pl-4"><p className="mb-2 text-xs font-semibold uppercase tracking-[.18em] text-[#702f35]">Добавлено к смете</p>{selectedAddOns.map((addOn) => <p key={addOn.id} className="flex justify-between gap-4 py-1 text-sm"><span>{addOn.name}</span><b>+{formatCurrency(addOn.total)}</b></p>)}</div>}
           {calculation && <div className="my-7 space-y-2 border-y border-[#39352e]/15 py-5 text-sm"><p className="flex justify-between"><span>Аванс {proposal.advance_percent}%</span><b>{formatCurrency(calculation.advance)}</b></p><p className="flex justify-between text-[#777066]"><span>Остаток</span><span>{formatCurrency(calculation.balance)}</span></p></div>}
           {!props.confirmed && !props.expired ? <form onSubmit={props.onConfirm} className="space-y-3">
             <input aria-label="Ваше имя" placeholder="Ваше имя" value={props.formData.client_name} onChange={e=>props.onFormChange({...props.formData,client_name:e.target.value})} className="editorial-input"/>
