@@ -9,21 +9,146 @@
     *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,Arial,sans-serif}
     header{padding:48px clamp(20px,6vw,80px) 28px;border-bottom:1px solid #14263d26;background:#fbf7ee}
     h1{margin:8px 0;font:500 clamp(36px,6vw,68px)/1.02 Georgia,serif;letter-spacing:-.035em}
-    header p{max-width:720px;color:#625c53;line-height:1.65}.eyebrow{color:var(--wine);font-size:12px;font-weight:700;letter-spacing:.22em;text-transform:uppercase}
-    main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:24px;padding:32px clamp(20px,6vw,80px) 64px}
+    header p{max-width:720px;color:#625c53;line-height:1.65}
+    .eyebrow{color:var(--wine);font-size:12px;font-weight:700;letter-spacing:.22em;text-transform:uppercase}
+    section{padding:32px clamp(20px,6vw,80px) 0}
+    section h2{font:500 clamp(24px,4vw,40px)/1.15 Georgia,serif;margin:0 0 8px;color:var(--ink)}
+    section>p{color:#71695f;font-size:14px;line-height:1.6;margin:0 0 20px;max-width:720px}
+    main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:24px;padding:0 clamp(20px,6vw,80px) 40px}
     article{border:1px solid #14263d24;background:#fffdf8;padding:18px;box-shadow:0 20px 60px #14263d0d}
-    h2{margin:4px 0 7px;font:500 27px/1.15 Georgia,serif}article p{margin:0 0 16px;color:#71695f;font-size:14px;line-height:1.55}
-    video{display:block;width:100%;aspect-ratio:16/10;background:#14263d;object-fit:contain}footer{padding:0 clamp(20px,6vw,80px) 36px;color:#71695f;font-size:13px}
+    h3{margin:4px 0 7px;font:500 20px/1.15 Georgia,serif}
+    .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:4px;margin-left:8px;vertical-align:middle}
+    .badge-desktop{background:#e8f0e8;color:#2d5a2d}
+    .badge-mobile{background:#e8e4f0;color:#4a3d6a}
+    article p{margin:0 0 16px;color:#71695f;font-size:14px;line-height:1.55}
+    article .duration{font-size:12px;color:#a09888;margin-top:-12px;margin-bottom:12px}
+    video{display:block;width:100%;aspect-ratio:16/10;background:#14263d;object-fit:contain}
+    footer{padding:24px clamp(20px,6vw,80px) 36px;color:#71695f;font-size:13px;border-top:1px solid #14263d15;margin-top:40px}
   </style>
 </head>
 <body>
-  <header><div class="eyebrow">Interactive KP · учебный центр</div><h1>Короткие демо кабинета</h1><p>Обзор основных рабочих разделов мебельщика. Видео записаны в реальном production-интерфейсе; они не выполняют необратимых действий и не изменяют клиентские данные.</p></header>
-  <main>
-    <article><h2>1. Обзор</h2><p>Главный экран, показатели и быстрый переход к рабочим действиям.</p><video controls preload="metadata" src="recordings/01-overview.webm"></video></article>
-    <article><h2>2. Клиенты</h2><p>Список клиентов и переход к созданию или просмотру карточки.</p><video controls preload="metadata" src="recordings/02-clients.webm"></video></article>
-    <article><h2>3. Коммерческие предложения</h2><p>Список КП, статусы, создание и открытие клиентского предложения.</p><video controls preload="metadata" src="recordings/03-proposals.webm"></video></article>
-    <article><h2>4. Настройки</h2><p>Название компании, логотип, фирменный цвет и защита PDF.</p><video controls preload="metadata" src="recordings/04-settings.webm"></video></article>
-  </main>
-  <footer>Следующий пакет: подробные сценарии «Создать клиента», «Создать КП», «Опубликовать и отправить» и «Подтверждение клиентом».</footer>
+  <header>
+    <div class="eyebrow">Interactive KP &middot; учебный центр</div>
+    <h1>Демо кабинета мебельщика</h1>
+    <p>Записи экрана реального production-интерфейса. Каждое видео показывает один рабочий сценарий от входа до результата.</p>
+  </header>
+
+  <!-- ═══ MANAGER: Dashboard & Navigation ═══ -->
+  <section>
+    <h2>Панель управления</h2>
+    <p>Главный экран со статистикой, быстрыми ссылками и навигацией по разделам.</p>
+    <main>
+      <article>
+        <h3>1. Дашборд и навигация</h3>
+        <div class="duration">~29 сек</div>
+        <p>Обзор главного экрана: показатели, ссылки &laquo;Новый клиент&raquo; и &laquo;Создать КП&raquo;, переход между разделами.</p>
+        <video controls preload="metadata" src="recordings/02-dashboard.webm"></video>
+      </article>
+    </main>
+  </section>
+
+  <!-- ═══ MANAGER: Clients ═══ -->
+  <section>
+    <h2>Клиенты</h2>
+    <p>Создание, просмотр и редактирование карточек клиентов.</p>
+    <main>
+      <article>
+        <h3>2. Создание клиента</h3>
+        <div class="duration">~24 сек</div>
+        <p>Заполнение формы: имя, телефон, email, примечание. Сохранение и переход к списку.</p>
+        <video controls preload="metadata" src="recordings/03-new-client.webm"></video>
+      </article>
+      <article>
+        <h3>3. Карточка клиента</h3>
+        <div class="duration">~20 сек</div>
+        <p>Просмотр данных клиента, привязанных КП, редактирование и удаление.</p>
+        <video controls preload="metadata" src="recordings/04-client-card.webm"></video>
+      </article>
+    </main>
+  </section>
+
+  <!-- ═══ MANAGER: Proposals ═══ -->
+  <section>
+    <h2>Коммерческие предложения</h2>
+    <p>Создание КП, добавление позиций и варианттов, публикация и отправка клиенту.</p>
+    <main>
+      <article>
+        <h3>4. Создание КП</h3>
+        <div class="duration">~29 сек</div>
+        <p>Выбор клиента, название проекта, срок действия, аванс. Создание и переход к редактору.</p>
+        <video controls preload="metadata" src="recordings/05-new-kp.webm"></video>
+      </article>
+      <article>
+        <h3>5. Добавление позиции</h3>
+        <div class="duration">~28 сек</div>
+        <p>Добавление мебельной позиции: название, размеры, количество. Валидация и сохранение.</p>
+        <video controls preload="metadata" src="recordings/06-add-item.webm"></video>
+      </article>
+      <article>
+        <h3>6. Варианты исполнения</h3>
+        <div class="duration">~10 сек</div>
+        <p>Добавление вариантов к позиции: материал, цена, комментарий. Выбор основного варианта.</p>
+        <video controls preload="metadata" src="recordings/07-add-variants.webm"></video>
+      </article>
+      <article>
+        <h3>7. Публикация и отправка</h3>
+        <div class="duration">~23 сек</div>
+        <p>Публикация КП, копирование клиентской ссылки, отправка через WhatsApp.</p>
+        <video controls preload="metadata" src="recordings/08-publish-kp.webm"></video>
+      </article>
+    </main>
+  </section>
+
+  <!-- ═══ CLIENT: Public view ═══ -->
+  <section>
+    <h2>Клиентский просмотр</h2>
+    <p>Как клиент видит коммерческое предложение на телефоне и компьютере.</p>
+    <main>
+      <article>
+        <h3>8. Мобильный вид <span class="badge badge-mobile">390×844</span></h3>
+        <div class="duration">~17 сек</div>
+        <p>Просмотр КП на мобильном: адаптивная вёрстка, варианты, подсчёт итого, подтверждение.</p>
+        <video controls preload="metadata" src="recordings/09-client-mobile.webm"></video>
+      </article>
+      <article>
+        <h3>9. Подтверждение клиентом <span class="badge badge-desktop">Desktop</span></h3>
+        <div class="duration">~12 сек</div>
+        <p>Выбор вариантов, проверка расчётов, нажатие &laquo;Подтвердить&raquo;. Статус меняется на &laquo;Подтверждено&raquo;.</p>
+        <video controls preload="metadata" src="recordings/10-client-confirm.webm"></video>
+      </article>
+    </main>
+  </section>
+
+  <!-- ═══ MANAGER: After confirmation ═══ -->
+  <section>
+    <h2>После подтверждения</h2>
+    <p>Менеджер видит подтверждённое КП и может разблокировать для изменений.</p>
+    <main>
+      <article>
+        <h3>10. Разблокировка КП</h3>
+        <div class="duration">~17 сек</div>
+        <p>Просмотр подтверждённого КП, статус &laquo;Подтверждено&raquo;, кнопка &laquo;Разблокировать&raquo; для повторного редактирования.</p>
+        <video controls preload="metadata" src="recordings/11-manager-unlock.webm"></video>
+      </article>
+    </main>
+  </section>
+
+  <!-- ═══ MANAGER: Settings ═══ -->
+  <section>
+    <h2>Настройки</h2>
+    <p>Параметры компании, логотип, фирменный стиль и защита PDF.</p>
+    <main>
+      <article>
+        <h3>11. Настройки компании</h3>
+        <div class="duration">~18 сек</div>
+        <p>Название, ИИН/БИН, адрес, телефон, email, логотип, фирменный цвет, водяной знак PDF.</p>
+        <video controls preload="metadata" src="recordings/12-settings.webm"></video>
+      </article>
+    </main>
+  </section>
+
+  <footer>
+    Interactive KP &middot; Записи сделаны в реальном production-окружении &middot; kp.salamat-mebel.kz
+  </footer>
 </body>
 </html>
