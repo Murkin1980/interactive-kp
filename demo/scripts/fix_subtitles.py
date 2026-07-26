@@ -25,19 +25,11 @@ FILES = [
 ]
 
 
-def count_srt_cues(srt_path):
-    with open(srt_path, "rb") as f:
-        text = f.read().decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
-    return text.count("-->")
-
-
 def main():
     for vid, srt_name, mp4_name in FILES:
         srt_src = os.path.join(CWD, SRT_DIR, srt_name)
         mp4_src = os.path.join(CWD, MP4_DIR, mp4_name)
         tmp_mp4 = os.path.join(CWD, MP4_DIR, f"{vid}-sub.mp4")
-
-        # Copy SRT to CWD root (relative path avoids Windows colon issue)
         srt_local = os.path.join(CWD, f"_sub_{vid}.srt")
 
         if not os.path.exists(srt_src):
@@ -48,12 +40,11 @@ def main():
             continue
 
         shutil.copy2(srt_src, srt_local)
-        n = count_srt_cues(srt_src)
-        print(f"Processing: {vid} ({n} cues)...", end=" ", flush=True)
+        print(f"Processing: {vid}...", end=" ", flush=True)
 
-        # Use subtitles filter with relative path (no colon in path)
+        # force_style forces Arial font which has Cyrillic support on Windows
         srt_filter_path = f"_sub_{vid}.srt"
-        vf = f"subtitles={srt_filter_path}"
+        vf = f"subtitles={srt_filter_path}:force_style='FontName=Arial,Fontsize=26,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1,Alignment=2,MarginV=30'"
 
         cmd = [
             FFMPEG, "-y",
@@ -76,12 +67,11 @@ def main():
             err = result.stderr.decode("utf-8", errors="replace")
             for line in err.split("\n"):
                 line = line.strip()
-                if line and ("Error" in line or "error" in line):
+                if line and ("Error" in line or "error" in line or "Unable" in line):
                     print(f"  {line}")
             if os.path.exists(tmp_mp4):
                 os.remove(tmp_mp4)
 
-        # Clean up temp SRT
         if os.path.exists(srt_local):
             os.remove(srt_local)
 
