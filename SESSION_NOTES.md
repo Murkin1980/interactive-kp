@@ -97,6 +97,48 @@
 - **Стили статуса:** добавлен `expired` стиль (красный) во всех списках КП
 - **Loading-состояния:** добавлены спиннеры загрузки на дашборд, списки клиентов и КП
 
+## Rebuild Demo Videos (2026-07-26)
+
+### Цель
+Перезаписать 13 демо-роликов в учебном центре (`/demos/`) с озвучкой, субтитрами и постерами.
+
+### Что сделано
+1. **Скрипты озвучки** — 13 TXT-файлов в `demo/narration/`
+2. **Генерация аудио** — edge-tts, голос `ru-RU-DmitryNestry`
+3. **Запись** — 13 Testreel JSON-сценариев, запись через `--channel chrome`
+4. **Пост-обработка** — FFmpeg: WebM→MP4, аудиомикс, субтитры в видео, постеры
+5. **Страница** — пересобрана с манифестом `manifest.json`, секциями, `<track>` для субтитров
+6. **Деплой** — `feature/rebuild-product-demos` → production
+
+### Структура файлов
+```
+demo/
+  scenarios/     ← 13 JSON-сценариев Testreel
+  narration/     ← 13 TXT-скриптов
+  subtitles/     ← 13 SRT-файлов (edge-tts)
+  scripts/       ← record.mjs, compose.mjs
+  output/        ← промежуточные файлы (gitignored)
+
+public/demos/
+  *.mp4          ← 13 H.264 MP4 видео
+  *.webm         ← 13 VP8 WebM видео
+  posters/*.jpg  ← 13 постеров (4s)
+  subtitles/*.vtt ← 13 WebVTT-файлов
+  manifest.json  ← каталог уроков
+  index.html     ← страница учебного центра
+```
+
+### Известные проблемы записи
+- Дублирующие селекторы навигации (desktop + mobile)
+- Некоторые шаги Testreel завершились ошибкой, но видео записаны
+- VP8 WebM кодирование медленное
+- Public URL: `/public/{token}` (не `/p/{token}`)
+
+### Технический отчёт
+См. `docs/TECHNICAL_REPORT_DEMO_VIDEOS.md`
+
+---
+
 ## Известные ограничения
 
 1. **Нет загрузки изображений** — Supabase Storage bucket `kp-images` ещё не создан
