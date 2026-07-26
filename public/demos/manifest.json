@@ -1,0 +1,136 @@
+{
+  "version": 2,
+  "generated": "2026-07-26",
+  "lessons": [
+    {
+      "id": "01-login",
+      "num": 1,
+      "title": "Вход в систему",
+      "description": "Авторизация через Google-аккаунт за один клик",
+      "poster": "posters/01-login.jpg",
+      "src": "01-login.mp4",
+      "srcWebm": "01-login.webm",
+      "subtitles": "subtitles/01-login.vtt"
+    },
+    {
+      "id": "02-dashboard",
+      "num": 2,
+      "title": "Обзор рабочего пространства",
+      "description": "Навигация по разделам: клиенты, предложения, настройки",
+      "poster": "posters/02-dashboard.jpg",
+      "src": "02-dashboard.mp4",
+      "srcWebm": "02-dashboard.webm",
+      "subtitles": "subtitles/02-dashboard.vtt"
+    },
+    {
+      "id": "03-new-client",
+      "num": 3,
+      "title": "Создание нового клиента",
+      "description": "Добавление имени, телефона, email и адреса клиента",
+      "poster": "posters/03-new-client.jpg",
+      "src": "03-new-client.mp4",
+      "srcWebm": "03-new-client.webm",
+      "subtitles": "subtitles/03-new-client.vtt"
+    },
+    {
+      "id": "04-client-card",
+      "num": 4,
+      "title": "Карточка клиента",
+      "description": "Просмотр и редактирование данных клиента",
+      "poster": "posters/04-client-card.jpg",
+      "src": "04-client-card.mp4",
+      "srcWebm": "04-client-card.webm",
+      "subtitles": "subtitles/04-client-card.vtt"
+    },
+    {
+      "id": "05-new-kp",
+      "num": 5,
+      "title": "Создание нового КП",
+      "description": "Выбор клиента, название проекта и настройки документа",
+      "poster": "posters/05-new-kp.jpg",
+      "src": "05-new-kp.mp4",
+      "srcWebm": "05-new-kp.webm",
+      "subtitles": "subtitles/05-new-kp.vtt"
+    },
+    {
+      "id": "06-add-item",
+      "num": 6,
+      "title": "Добавление позиции",
+      "description": "Название, размеры и параметры мебельного элемента",
+      "poster": "posters/06-add-item.jpg",
+      "src": "06-add-item.mp4",
+      "srcWebm": "06-add-item.webm",
+      "subtitles": "subtitles/06-add-item.vtt"
+    },
+    {
+      "id": "07-photos-sketch",
+      "num": 7,
+      "title": "Фото и эскиз",
+      "description": "Загрузка фотографий и эскизов к позиции",
+      "poster": "posters/07-photos-sketch.jpg",
+      "src": "07-photos-sketch.mp4",
+      "srcWebm": "07-photos-sketch.webm",
+      "subtitles": "subtitles/07-photos-sketch.vtt"
+    },
+    {
+      "id": "08-variants",
+      "num": 8,
+      "title": "Варианты исполнения",
+      "description": "Создание вариантов с разными материалами и ценами",
+      "poster": "posters/08-variants.jpg",
+      "src": "08-variants.mp4",
+      "srcWebm": "08-variants.webm",
+      "subtitles": "subtitles/08-variants.vtt"
+    },
+    {
+      "id": "09-options",
+      "num": 9,
+      "title": "Доплаты и опции",
+      "description": "Добавление доплат за фурнитуру, столешницу и комплектующие",
+      "poster": "posters/09-options.jpg",
+      "src": "09-options.mp4",
+      "srcWebm": "09-options.webm",
+      "subtitles": "subtitles/09-options.vtt"
+    },
+    {
+      "id": "10-settings",
+      "num": 10,
+      "title": "Настройки предложения",
+      "description": "Срок действия, предоплата и типы скидок",
+      "poster": "posters/10-settings.jpg",
+      "src": "10-settings.mp4",
+      "srcWebm": "10-settings.webm",
+      "subtitles": "subtitles/10-settings.vtt"
+    },
+    {
+      "id": "11-client-view-mobile",
+      "num": 11,
+      "title": "Вид клиента — мобильный",
+      "description": "Как клиент видит КП на телефоне через WhatsApp-ссылку",
+      "poster": "posters/11-client-view-mobile.jpg",
+      "src": "11-client-view-mobile.mp4",
+      "srcWebm": "11-client-view-mobile.webm",
+      "subtitles": "subtitles/11-client-view-mobile.vtt"
+    },
+    {
+      "id": "12-confirm-pdf",
+      "num": 12,
+      "title": "Подтверждение и PDF",
+      "description": "Клиент подтверждает КП и скачивает PDF-документ",
+      "poster": "posters/12-confirm-pdf.jpg",
+      "src": "12-confirm-pdf.mp4",
+      "srcWebm": "12-confirm-pdf.webm",
+      "subtitles": "subtitles/12-confirm-pdf.vtt"
+    },
+    {
+      "id": "13-unlock-settings",
+      "num": 13,
+      "title": "Блокировка и безопасность",
+      "description": "Настройка блокировки аккаунта и безопасность данных",
+      "poster": "posters/13-unlock-settings.jpg",
+      "src": "13-unlock-settings.mp4",
+      "srcWebm": "13-unlock-settings.webm",
+      "subtitles": "subtitles/13-unlock-settings.vtt"
+    }
+  ]
+}
