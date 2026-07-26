@@ -1,0 +1,31 @@
+{
+  "$schema": "../../node_modules/testreel/recording-definition.schema.json",
+  "url": "https://kp.salamat-mebel.kz/public/4da5dbd2-d8df-4742-9e2f-ba808af96c4c",
+  "viewport": { "width": 390, "height": 844 },
+  "outputSize": { "width": 1170, "height": 2532 },
+  "outputFormat": "webm",
+  "speed": 0.7,
+  "cursor": { "style": "touch", "size": 44, "rippleColor": "rgba(194, 164, 109, 0.5)", "idleHide": false },
+  "background": { "color": "#FFFFFF", "padding": 0, "borderRadius": 0 },
+  "steps": [
+    { "action": "wait", "ms": 3000 },
+    { "action": "screenshot", "name": "mobile-kp-top" },
+    { "action": "wait", "ms": 2000 },
+    { "action": "scroll", "y": 400 },
+    { "action": "wait", "ms": 2000 },
+    { "action": "screenshot", "name": "mobile-items" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "scroll", "y": 400 },
+    { "action": "wait", "ms": 2000 },
+    { "action": "screenshot", "name": "mobile-variants" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "scroll", "y": 400 },
+    { "action": "wait", "ms": 2000 },
+    { "action": "screenshot", "name": "mobile-total" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "scroll", "y": 400 },
+    { "action": "wait", "ms": 2000 },
+    { "action": "screenshot", "name": "mobile-cta" },
+    { "action": "wait", "ms": 2000 }
+  ]
+}

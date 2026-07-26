@@ -50,3 +50,12 @@ next-env.d.ts
 !.dev.vars.example
 
 !.env.example
+
+# Demo recording artifacts
+demo/output/
+testreel-output/
+demo/scenarios/*.tmp
+*.storageState.json
+
+# Temp demo files
+C:\tmp\demo-output\

@@ -35,6 +35,7 @@
     "eslint-config-next": "16.2.10",
     "playwright": "^1.61.1",
     "tailwindcss": "^4",
+    "testreel": "^0.2.0",
     "typescript": "^5",
     "wrangler": "^4.112.0"
   }

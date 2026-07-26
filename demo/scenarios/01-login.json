@@ -1,0 +1,35 @@
+{
+  "$schema": "../../node_modules/testreel/recording-definition.schema.json",
+  "url": "https://kp.salamat-mebel.kz/login",
+  "viewport": { "width": 1440, "height": 900 },
+  "outputSize": { "width": 1920, "height": 1080 },
+  "outputFormat": "webm",
+  "speed": 0.7,
+  "cursor": {
+    "style": "pointer",
+    "size": 36,
+    "rippleColor": "rgba(194, 164, 109, 0.5)",
+    "idleHide": false
+  },
+  "chrome": {
+    "enabled": true,
+    "titleBarColor": "#14263D",
+    "url": "kp.salamat-mebel.kz/login"
+  },
+  "background": {
+    "color": "#F3EFE4",
+    "padding": 40,
+    "borderRadius": 12
+  },
+  "steps": [
+    { "action": "wait", "ms": 2000 },
+    { "action": "screenshot", "name": "login-page" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "hover", "selector": "text=Продолжить с Google" },
+    { "action": "wait", "ms": 1000 },
+    { "action": "zoom", "selector": "text=Продолжить с Google", "scale": 1.5, "duration": 600 },
+    { "action": "wait", "ms": 1500 },
+    { "action": "zoom", "scale": 1 },
+    { "action": "wait", "ms": 1000 }
+  ]
+}
