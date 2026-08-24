@@ -57,5 +57,5 @@ testreel-output/
 demo/scenarios/*.tmp
 *.storageState.json
 
-# Temp demo files
-C:\tmp\demo-output\
+# Temp demo files (repository-relative only; absolute Windows paths are invalid gitignore globs)
+demo-output/

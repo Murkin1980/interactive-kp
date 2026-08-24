@@ -1,5 +1,16 @@
 # SESSION_NOTES — Разработка Interactive KP
 
+## 2026-08-24 — принято решение о миграции на MiniBase
+
+- MPE disposition: `REUSE_COMPONENT`.
+- Целевой backend: существующий MiniBase; новый BaaS не создаётся.
+- Supabase сохраняется только как rollback source до подтверждённого cutover.
+- Прямая browser-to-MiniBase запись запрещена: `mb_secret_*` остаётся только в
+  доверенном Next.js/Cloudflare backend.
+- План и стоп-критерии: `docs/MINIBASE_MIGRATION_DECISION.md`.
+- До начала миграции проверены текущая ветка, lint и production build; ветка
+  `feature/rebuild-product-demos` опубликована в GitHub.
+
 ## Дата: Июль 2026
 
 ## Сессия 1: Инициализация проекта

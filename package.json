@@ -7,6 +7,8 @@
     "dev": "next dev",
     "start": "next start",
     "lint": "eslint",
+    "check:minibase-boundary": "node scripts/check-minibase-boundary.mjs",
+    "check": "npm run check:minibase-boundary && npm run lint && npm run build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy -- --keep-vars",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
