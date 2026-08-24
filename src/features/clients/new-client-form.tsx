@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/clients/browser-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,7 +20,6 @@ export default function NewClientForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,15 +39,9 @@ export default function NewClientForm() {
       return;
     }
 
-    const { error } = await supabase.from("clients").insert({
-      name: formData.name,
-      phone: formData.phone || null,
-      email: formData.email || null,
-      address: formData.address || null,
-      notes: formData.notes || null,
-    });
-
-    if (error) {
+    try {
+      await createClient(result.data);
+    } catch {
       setErrors({ root: "Ошибка сохранения" });
       setLoading(false);
       return;

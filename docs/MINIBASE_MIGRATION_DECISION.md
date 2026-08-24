@@ -92,6 +92,12 @@ Browser
 - добавить MiniBase server client и запрет импорта secret client в browser code;
 - добавить contract tests.
 
+Статус: **выполняется**. CRUD клиентов переведён с browser-to-Supabase на
+защищённые Next.js server routes и MiniBase Records API. Существующая Supabase
+сессия временно проверяется в одном server-only auth boundary до включения
+Cloudflare Access; данные клиентов в Supabase больше не используются этим
+сценарием.
+
 ### IKP-MB2 — основной менеджерский сценарий
 
 - клиенты;

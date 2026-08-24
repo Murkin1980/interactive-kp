@@ -183,3 +183,13 @@ public/demos/
 | `src/lib/validation/index.ts` | Zod-схемы валидации |
 | `src/types/index.ts` | TypeScript-интерфейсы |
 | `supabase/migrations/001_initial_schema.sql` | Схема БД |
+# 2026-08-25 — MiniBase: вертикальный срез клиентов
+
+- MiniBase зафиксирован как единственный целевой data backend.
+- CRUD клиентов перенесён из браузерного Supabase SDK в `/api/clients` и
+  `/api/clients/[id]`, работающие через server-only MiniBase client.
+- Добавлена обязательная проверка существующей manager session перед каждым
+  запросом и ownership-проверка каждой клиентской записи.
+- Supabase session verifier изолирован как временный auth adapter; после
+  настройки Cloudflare Access он будет заменён без изменения клиентского CRUD.
+- `npm run check`: PASS (secret boundary, ESLint, TypeScript/Next production build).
