@@ -59,3 +59,7 @@ demo/scenarios/*.tmp
 
 # Temp demo files (repository-relative only; absolute Windows paths are invalid gitignore globs)
 demo-output/
+
+# Local archive copied from the legacy OneDrive workspace. Never commit its
+# generated files or historical local configuration.
+/archive/
