@@ -193,3 +193,15 @@ public/demos/
 - Supabase session verifier изолирован как временный auth adapter; после
   настройки Cloudflare Access он будет заменён без изменения клиентского CRUD.
 - `npm run check`: PASS (secret boundary, ESLint, TypeScript/Next production build).
+# 2026-08-25 — MiniBase: список и создание КП
+
+- Router-агенты параллельно подготовили карту переноса proposal flow и провели
+  security-review MiniBase boundary.
+- Список и создание КП переведены с browser-to-Supabase на защищённый
+  `/api/proposals` и server-only MiniBase repository.
+- Клиенты и КП физически партиционированы в MiniBase по manager ID, чтобы
+  запрос списка не читал PII других владельцев.
+- Ужесточены лимиты полей клиентов и обработка invalid JSON/MiniBase 4xx.
+- Автонумерация КП пока не атомарна; production cutover этого сценария
+  запрещён до появления compare-and-swap/atomic command в MiniBase.
+- `npm run check`: PASS (boundary, ESLint, TypeScript/Next production build).

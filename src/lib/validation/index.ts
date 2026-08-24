@@ -7,11 +7,11 @@ const optionalNull = <T extends z.ZodTypeAny>(schema: T) =>
   );
 
 export const clientSchema = z.object({
-  name: z.string().min(1, "Обязательное поле"),
-  phone: optionalNull(z.string()),
+  name: z.string().trim().min(1, "Обязательное поле").max(160, "Не более 160 символов"),
+  phone: optionalNull(z.string().trim().max(40, "Не более 40 символов")),
   email: optionalNull(z.string().email("Некорректный email")),
-  address: optionalNull(z.string()),
-  notes: optionalNull(z.string()),
+  address: optionalNull(z.string().trim().max(500, "Не более 500 символов")),
+  notes: optionalNull(z.string().trim().max(5000, "Не более 5000 символов")),
 });
 
 export const kpSchema = z.object({
