@@ -11,6 +11,19 @@
 - До начала миграции проверены текущая ветка, lint и production build; ветка
   `feature/rebuild-product-demos` опубликована в GitHub.
 
+## 2026-08-25 — MiniBase production onboarding
+
+- MiniBase Worker обновлён до `0.23.0` после полного PASS его release gate.
+- Создан отдельный project `interactive-kp` в EEUR, schema v4.
+- Настроены production и localhost origins.
+- `MINIBASE_URL` и `MINIBASE_SECRET_KEY` сохранены только как Cloudflare Worker
+  secrets приложения.
+- Одноразовый management key отозван; raw management/data keys не записывались
+  в Git, документацию или логи.
+- Cloudflare Access не создан: Wrangler OAuth не имеет Access write scope.
+- Supabase production ещё не отключён: он остаётся текущим runtime до переноса
+  кода и подтверждённой сверки данных.
+
 ## Дата: Июль 2026
 
 ## Сессия 1: Инициализация проекта

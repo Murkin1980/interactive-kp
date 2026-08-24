@@ -5,6 +5,27 @@
 Владелец решения: Мурат
 
 Статус: принято, реализация по этапам
+
+## Provisioning status
+
+На 2026-08-25 создан и проверен целевой MiniBase project:
+
+- slug: `interactive-kp`;
+- project ID: `58e27c56-0374-4a3f-84c5-90dca9bfcb3e`;
+- отдельная D1: `22250945-ad19-44e4-a18f-9012983bd5f6`;
+- регион: EEUR;
+- project schema: v4;
+- origins: `https://kp.salamat-mebel.kz`, `http://localhost:3000`;
+- `MINIBASE_URL` и `MINIBASE_SECRET_KEY` сохранены как Worker secrets;
+- одноразовый management key отозван после onboarding.
+
+MiniBase production Worker обновлён до `0.23.0`, version
+`6c5f014d-7028-4097-9896-832672890128`.
+
+Cloudflare Access пока не создан: текущий Wrangler OAuth имеет Workers/D1 write,
+но не имеет Access write. Настройка Access требует отдельного Cloudflare API
+token с минимальным Access application/policy scope либо авторизованной сессии
+Cloudflare Dashboard.
 Диспозиция MPE: **REUSE_COMPONENT**
 
 ## Решение
@@ -60,6 +81,9 @@ Browser
 - определить MiniBase collections, record IDs и file paths;
 - определить auth/session boundary и backend API;
 - подготовить export manifest, checksums, verification и rollback plan.
+
+Статус: **выполняется**. Целевой MiniBase project и secrets уже созданы;
+инвентаризация Supabase-источника и export package ещё не завершены.
 
 ### IKP-MB1 — адаптеры без cutover
 
