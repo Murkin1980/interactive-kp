@@ -1,0 +1,31 @@
+{
+  "$schema": "../../node_modules/testreel/recording-definition.schema.json",
+  "url": "https://kp.salamat-mebel.kz/proposals/fc72ae5a-5b0b-403d-83ae-d4db79a030f6",
+  "viewport": { "width": 1440, "height": 900 },
+  "outputSize": { "width": 1920, "height": 1080 },
+  "outputFormat": "webm",
+  "speed": 0.7,
+  "storageState": "C:\\tmp\\interactive-kp-demo-auth.json",
+  "cursor": { "style": "pointer", "size": 36, "rippleColor": "rgba(194, 164, 109, 0.5)", "idleHide": false },
+  "chrome": { "enabled": true, "titleBarColor": "#14263D", "url": "kp.salamat-mebel.kz/proposals/..." },
+  "background": { "color": "#F3EFE4", "padding": 40, "borderRadius": 12 },
+  "steps": [
+    { "action": "wait", "ms": 3000 },
+    { "action": "scroll", "y": 99999 },
+    { "action": "wait", "ms": 2000 },
+    { "action": "screenshot", "name": "settings-area" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "hover", "selector": "#client_id" },
+    { "action": "wait", "ms": 1000 },
+    { "action": "zoom", "selector": "#client_id", "scale": 1.5, "duration": 600 },
+    { "action": "wait", "ms": 2000 },
+    { "action": "zoom", "scale": 1 },
+    { "action": "wait", "ms": 1000 },
+    { "action": "hover", "selector": "input[type='date']" },
+    { "action": "wait", "ms": 1000 },
+    { "action": "zoom", "selector": "input[type='date']", "scale": 1.5, "duration": 600 },
+    { "action": "wait", "ms": 2000 },
+    { "action": "zoom", "scale": 1 },
+    { "action": "wait", "ms": 1000 }
+  ]
+}

@@ -1,5 +1,29 @@
 # SESSION_NOTES — Разработка Interactive KP
 
+## 2026-08-24 — принято решение о миграции на MiniBase
+
+- MPE disposition: `REUSE_COMPONENT`.
+- Целевой backend: существующий MiniBase; новый BaaS не создаётся.
+- Supabase сохраняется только как rollback source до подтверждённого cutover.
+- Прямая browser-to-MiniBase запись запрещена: `mb_secret_*` остаётся только в
+  доверенном Next.js/Cloudflare backend.
+- План и стоп-критерии: `docs/MINIBASE_MIGRATION_DECISION.md`.
+- До начала миграции проверены текущая ветка, lint и production build; ветка
+  `feature/rebuild-product-demos` опубликована в GitHub.
+
+## 2026-08-25 — MiniBase production onboarding
+
+- MiniBase Worker обновлён до `0.23.0` после полного PASS его release gate.
+- Создан отдельный project `interactive-kp` в EEUR, schema v4.
+- Настроены production и localhost origins.
+- `MINIBASE_URL` и `MINIBASE_SECRET_KEY` сохранены только как Cloudflare Worker
+  secrets приложения.
+- Одноразовый management key отозван; raw management/data keys не записывались
+  в Git, документацию или логи.
+- Cloudflare Access не создан: Wrangler OAuth не имеет Access write scope.
+- Supabase production ещё не отключён: он остаётся текущим runtime до переноса
+  кода и подтверждённой сверки данных.
+
 ## Дата: Июль 2026
 
 ## Сессия 1: Инициализация проекта
@@ -97,6 +121,48 @@
 - **Стили статуса:** добавлен `expired` стиль (красный) во всех списках КП
 - **Loading-состояния:** добавлены спиннеры загрузки на дашборд, списки клиентов и КП
 
+## Rebuild Demo Videos (2026-07-26)
+
+### Цель
+Перезаписать 13 демо-роликов в учебном центре (`/demos/`) с озвучкой, субтитрами и постерами.
+
+### Что сделано
+1. **Скрипты озвучки** — 13 TXT-файлов в `demo/narration/`
+2. **Генерация аудио** — edge-tts, голос `ru-RU-DmitryNestry`
+3. **Запись** — 13 Testreel JSON-сценариев, запись через `--channel chrome`
+4. **Пост-обработка** — FFmpeg: WebM→MP4, аудиомикс, субтитры в видео, постеры
+5. **Страница** — пересобрана с манифестом `manifest.json`, секциями, `<track>` для субтитров
+6. **Деплой** — `feature/rebuild-product-demos` → production
+
+### Структура файлов
+```
+demo/
+  scenarios/     ← 13 JSON-сценариев Testreel
+  narration/     ← 13 TXT-скриптов
+  subtitles/     ← 13 SRT-файлов (edge-tts)
+  scripts/       ← record.mjs, compose.mjs
+  output/        ← промежуточные файлы (gitignored)
+
+public/demos/
+  *.mp4          ← 13 H.264 MP4 видео
+  *.webm         ← 13 VP8 WebM видео
+  posters/*.jpg  ← 13 постеров (4s)
+  subtitles/*.vtt ← 13 WebVTT-файлов
+  manifest.json  ← каталог уроков
+  index.html     ← страница учебного центра
+```
+
+### Известные проблемы записи
+- Дублирующие селекторы навигации (desktop + mobile)
+- Некоторые шаги Testreel завершились ошибкой, но видео записаны
+- VP8 WebM кодирование медленное
+- Public URL: `/public/{token}` (не `/p/{token}`)
+
+### Технический отчёт
+См. `docs/TECHNICAL_REPORT_DEMO_VIDEOS.md`
+
+---
+
 ## Известные ограничения
 
 1. **Нет загрузки изображений** — Supabase Storage bucket `kp-images` ещё не создан
@@ -117,3 +183,25 @@
 | `src/lib/validation/index.ts` | Zod-схемы валидации |
 | `src/types/index.ts` | TypeScript-интерфейсы |
 | `supabase/migrations/001_initial_schema.sql` | Схема БД |
+# 2026-08-25 — MiniBase: вертикальный срез клиентов
+
+- MiniBase зафиксирован как единственный целевой data backend.
+- CRUD клиентов перенесён из браузерного Supabase SDK в `/api/clients` и
+  `/api/clients/[id]`, работающие через server-only MiniBase client.
+- Добавлена обязательная проверка существующей manager session перед каждым
+  запросом и ownership-проверка каждой клиентской записи.
+- Supabase session verifier изолирован как временный auth adapter; после
+  настройки Cloudflare Access он будет заменён без изменения клиентского CRUD.
+- `npm run check`: PASS (secret boundary, ESLint, TypeScript/Next production build).
+# 2026-08-25 — MiniBase: список и создание КП
+
+- Router-агенты параллельно подготовили карту переноса proposal flow и провели
+  security-review MiniBase boundary.
+- Список и создание КП переведены с browser-to-Supabase на защищённый
+  `/api/proposals` и server-only MiniBase repository.
+- Клиенты и КП физически партиционированы в MiniBase по manager ID, чтобы
+  запрос списка не читал PII других владельцев.
+- Ужесточены лимиты полей клиентов и обработка invalid JSON/MiniBase 4xx.
+- Автонумерация КП пока не атомарна; production cutover этого сценария
+  запрещён до появления compare-and-swap/atomic command в MiniBase.
+- `npm run check`: PASS (boundary, ESLint, TypeScript/Next production build).

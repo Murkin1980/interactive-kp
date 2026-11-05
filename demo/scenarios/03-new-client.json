@@ -1,0 +1,59 @@
+{
+  "$schema": "../../node_modules/testreel/recording-definition.schema.json",
+  "url": "https://kp.salamat-mebel.kz/clients/new",
+  "viewport": { "width": 1440, "height": 900 },
+  "outputSize": { "width": 1920, "height": 1080 },
+  "outputFormat": "webm",
+  "speed": 0.7,
+  "storageState": "C:\\tmp\\interactive-kp-demo-auth.json",
+  "cursor": {
+    "style": "pointer",
+    "size": 36,
+    "rippleColor": "rgba(194, 164, 109, 0.5)",
+    "idleHide": false
+  },
+  "chrome": {
+    "enabled": true,
+    "titleBarColor": "#14263D",
+    "url": "kp.salamat-mebel.kz/clients/new"
+  },
+  "background": {
+    "color": "#F3EFE4",
+    "padding": 40,
+    "borderRadius": 12
+  },
+  "steps": [
+    { "action": "wait", "ms": 3000 },
+    { "action": "screenshot", "name": "new-client-form" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "click", "selector": "#name" },
+    { "action": "wait", "ms": 500 },
+    { "action": "type", "selector": "#name", "text": "Айдар Садыков", "delay": 60 },
+    { "action": "wait", "ms": 1000 },
+    { "action": "click", "selector": "#phone" },
+    { "action": "wait", "ms": 500 },
+    { "action": "type", "selector": "#phone", "text": "+7 700 123 4567", "delay": 40 },
+    { "action": "wait", "ms": 1000 },
+    { "action": "click", "selector": "#email" },
+    { "action": "wait", "ms": 500 },
+    { "action": "type", "selector": "#email", "text": "demo@example.com", "delay": 40 },
+    { "action": "wait", "ms": 1000 },
+    { "action": "click", "selector": "#address" },
+    { "action": "wait", "ms": 500 },
+    { "action": "type", "selector": "#address", "text": "г. Алматы, ул. Примерная, 42", "delay": 40 },
+    { "action": "wait", "ms": 1000 },
+    { "action": "click", "selector": "#notes" },
+    { "action": "wait", "ms": 500 },
+    { "action": "type", "selector": "#notes", "text": "Кухня в стиле минимализм, замер 15 июля", "delay": 40 },
+    { "action": "wait", "ms": 1500 },
+    { "action": "screenshot", "name": "form-filled" },
+    { "action": "wait", "ms": 1000 },
+    { "action": "zoom", "selector": "button:has-text('Сохранить')", "scale": 1.5, "duration": 600 },
+    { "action": "wait", "ms": 1000 },
+    { "action": "zoom", "scale": 1 },
+    { "action": "wait", "ms": 500 },
+    { "action": "click", "selector": "button:has-text('Сохранить')" },
+    { "action": "wait", "ms": 3000 },
+    { "action": "screenshot", "name": "client-saved" }
+  ]
+}

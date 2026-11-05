@@ -1,0 +1,25 @@
+{
+  "$schema": "../../node_modules/testreel/recording-definition.schema.json",
+  "url": "https://kp.salamat-mebel.kz/clients/0bf11bae-9891-4033-be26-d9cf213ec9eb",
+  "viewport": { "width": 1440, "height": 900 },
+  "outputSize": { "width": 1920, "height": 1080 },
+  "outputFormat": "webm",
+  "speed": 0.7,
+  "storageState": "C:\\tmp\\interactive-kp-demo-auth.json",
+  "cursor": { "style": "pointer", "size": 36, "rippleColor": "rgba(194, 164, 109, 0.5)", "idleHide": false },
+  "chrome": { "enabled": true, "titleBarColor": "#14263D", "url": "kp.salamat-mebel.kz/clients/..." },
+  "background": { "color": "#F3EFE4", "padding": 40, "borderRadius": 12 },
+  "steps": [
+    { "action": "wait", "ms": 3000 },
+    { "action": "screenshot", "name": "client-card" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "hover", "selector": "#name" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "scroll", "y": 300 },
+    { "action": "wait", "ms": 1500 },
+    { "action": "hover", "selector": "#phone" },
+    { "action": "wait", "ms": 1500 },
+    { "action": "scroll", "y": -300 },
+    { "action": "wait", "ms": 1000 }
+  ]
+}

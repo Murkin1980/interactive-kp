@@ -7,6 +7,9 @@
     "dev": "next dev",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --experimental-transform-types --import ./scripts/test-loader.mjs --test src/lib/auth/manager-session.test.ts src/lib/proposals/repository.test.ts src/lib/proposals/items-repository.test.ts",
+    "check:minibase-boundary": "node scripts/check-minibase-boundary.mjs",
+    "check": "npm run check:minibase-boundary && npm run lint && npm run build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy -- --keep-vars",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
@@ -18,6 +21,7 @@
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.7",
     "clsx": "^2.1.1",
+    "jose": "^6.2.15",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.468.0",
     "next": "16.2.10",
@@ -35,6 +39,7 @@
     "eslint-config-next": "16.2.10",
     "playwright": "^1.61.1",
     "tailwindcss": "^4",
+    "testreel": "^0.2.0",
     "typescript": "^5",
     "wrangler": "^4.112.0"
   }
