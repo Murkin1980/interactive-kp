@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { listProposals } from "@/lib/proposals/browser-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -19,22 +19,16 @@ const STATUS_LABELS: Record<KpStatus, string> = {
 export default function ProposalsContent() {
   const [proposals, setProposals] = useState<Kp[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase
-        .from("kps")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (!cancelled && data) {
-        setProposals(data);
-      }
+      const data = await listProposals().catch(() => []);
+      if (!cancelled) setProposals(data);
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [supabase]);
+  }, []);
 
   return (
     <AppLayout>

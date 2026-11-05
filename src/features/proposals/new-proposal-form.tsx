@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { listClients } from "@/lib/clients/browser-api";
+import { createProposal } from "@/lib/proposals/browser-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,21 +30,15 @@ export default function NewProposalForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase
-        .from("clients")
-        .select("*")
-        .order("name");
-      if (!cancelled && data) {
-        setClients(data);
-      }
+      const data = await listClients().catch(() => []);
+      if (!cancelled) setClients(data);
     })();
     return () => { cancelled = true; };
-  }, [supabase]);
+  }, []);
 
   const handleClientChange = (clientId: string) => {
     const client = clients.find((c) => c.id === clientId);
@@ -82,38 +77,14 @@ export default function NewProposalForm() {
       return;
     }
 
-    let number = formData.number;
-    if (!number) {
-      const { data } = await supabase.rpc("get_next_kp_number");
-      number = data || `КП-${new Date().getFullYear()}-001`;
-    }
-
-    const { data: newKp, error } = await supabase
-      .from("kps")
-      .insert({
-        number,
-        client_id: formData.client_id || null,
-        client_name: formData.client_name,
-        client_phone: formData.client_phone || null,
-        project_name: formData.project_name,
-        valid_until: formData.valid_until || null,
-        notes: formData.notes || null,
-        advance_percent: formData.advance_percent,
-        balance_condition: formData.balance_condition || null,
-        discount_type: formData.discount_type,
-        discount_value: formData.discount_value,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      setErrors({ root: "Ошибка сохранения: " + error.message });
+    try {
+      const newKp = await createProposal(result.data);
+      router.push(`/proposals/${newKp.id}`);
+      router.refresh();
+    } catch {
+      setErrors({ root: "Ошибка сохранения" });
       setLoading(false);
-      return;
     }
-
-    router.push(`/proposals/${newKp.id}`);
-    router.refresh();
   };
 
   return (

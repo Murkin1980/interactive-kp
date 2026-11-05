@@ -50,3 +50,16 @@ next-env.d.ts
 !.dev.vars.example
 
 !.env.example
+
+# Demo recording artifacts
+demo/output/
+testreel-output/
+demo/scenarios/*.tmp
+*.storageState.json
+
+# Temp demo files (repository-relative only; absolute Windows paths are invalid gitignore globs)
+demo-output/
+
+# Local archive copied from the legacy OneDrive workspace. Never commit its
+# generated files or historical local configuration.
+/archive/
