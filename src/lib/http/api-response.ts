@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
-import { ManagerAuthenticationError } from "@/lib/auth/manager-session";
+import {
+  ManagerAuthenticationError,
+  ManagerAuthorizationError,
+  ManagerConfigurationError,
+} from "@/lib/auth/manager-session";
 import { MiniBaseError } from "@/lib/minibase/server-client";
 import { ProposalDomainError } from "@/lib/proposals/items-repository";
 
 export function apiError(error: unknown): NextResponse {
   if (error instanceof ManagerAuthenticationError) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (error instanceof ManagerAuthorizationError) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  if (error instanceof ManagerConfigurationError) {
+    console.error("Manager authentication configuration error:", error.message);
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
   if (error instanceof ProposalDomainError) {
     return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });

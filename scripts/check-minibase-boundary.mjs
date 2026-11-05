@@ -3,7 +3,7 @@ import { join, relative } from "node:path";
 
 const root = process.cwd();
 const sourceRoot = join(root, "src");
-const forbiddenSecret = /(?:mb_secret_|MINIBASE_SECRET_KEY)/;
+const forbiddenSecret = /(?:mb_secret_|MINIBASE_SECRET_KEY|CLOUDFLARE_ACCESS_MANAGER_MAP|CLOUDFLARE_ACCESS_AUD|CLOUDFLARE_ACCESS_ISSUER)/;
 const clientDirective = /^\s*["']use client["'];?/m;
 const findings = [];
 

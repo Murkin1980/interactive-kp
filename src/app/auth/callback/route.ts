@@ -1,21 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 
+/**
+ * Legacy Supabase OAuth callback route.
+ *
+ * Authentication is now managed by Cloudflare Access. Any legacy redirects
+ * hitting this route are forwarded directly to the dashboard.
+ */
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
-  const requestedNext = searchParams.get("next") || "/dashboard";
-  const next = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/dashboard";
-
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      const forwardedHost = request.headers.get("x-forwarded-host");
-      const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
-      if (forwardedHost) return NextResponse.redirect(`${forwardedProto}://${forwardedHost}${next}`);
-      return NextResponse.redirect(`${origin}${next}`);
-    }
-  }
-  return NextResponse.redirect(`${origin}/login?error=oauth`);
+  const { origin } = new URL(request.url);
+  return NextResponse.redirect(new URL("/dashboard", origin));
 }
