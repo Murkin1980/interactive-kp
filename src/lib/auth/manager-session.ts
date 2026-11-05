@@ -35,6 +35,12 @@ export interface VerifyCloudflareAccessOptions {
 
 const jwksCache = new Map<string, JWTVerifyGetKey>();
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isValidUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_REGEX.test(value.trim());
+}
+
 function getOrCreateRemoteJWKSet(issuer: string): JWTVerifyGetKey {
   let cached = jwksCache.get(issuer);
   if (!cached) {
@@ -51,6 +57,17 @@ export function parseManagerMap(rawMap?: string | Record<string, string> | null)
 
   let parsed: unknown = rawMap;
   if (typeof rawMap === "string") {
+    // Check for duplicate email keys in raw JSON string (both case-identical and case-variant)
+    const keyMatches = [...rawMap.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"\s*:/g)];
+    const seenRawKeys = new Set<string>();
+    for (const match of keyMatches) {
+      const normalizedKey = match[1].trim().toLowerCase();
+      if (seenRawKeys.has(normalizedKey)) {
+        throw new ManagerConfigurationError("duplicate_manager_email_config");
+      }
+      seenRawKeys.add(normalizedKey);
+    }
+
     try {
       parsed = JSON.parse(rawMap);
     } catch {
@@ -62,19 +79,33 @@ export function parseManagerMap(rawMap?: string | Record<string, string> | null)
     throw new ManagerConfigurationError("invalid_manager_map_config");
   }
 
-  const normalized: Record<string, string> = {};
-  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (typeof key === "string" && typeof value === "string") {
-      const email = key.trim().toLowerCase();
-      const managerId = value.trim();
-      if (email && managerId) {
-        normalized[email] = managerId;
-      }
-    }
+  const entries = Object.entries(parsed as Record<string, unknown>);
+  if (entries.length === 0) {
+    throw new ManagerConfigurationError("invalid_manager_map_config");
   }
 
-  if (Object.keys(normalized).length === 0) {
-    throw new ManagerConfigurationError("invalid_manager_map_config");
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of entries) {
+    if (typeof key !== "string" || typeof value !== "string") {
+      throw new ManagerConfigurationError("invalid_manager_map_config");
+    }
+
+    const email = key.trim().toLowerCase();
+    const managerId = value.trim();
+
+    if (!email || !managerId) {
+      throw new ManagerConfigurationError("invalid_manager_map_config");
+    }
+
+    if (!isValidUuid(managerId)) {
+      throw new ManagerConfigurationError("invalid_manager_id_uuid");
+    }
+
+    if (normalized[email]) {
+      throw new ManagerConfigurationError("duplicate_manager_email_config");
+    }
+
+    normalized[email] = managerId;
   }
 
   return normalized;

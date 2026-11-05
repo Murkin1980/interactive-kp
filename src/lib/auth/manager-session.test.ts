@@ -240,12 +240,71 @@ test("Cloudflare Access Manager Session & Auth Adapter", async (t) => {
       (err: unknown) => err instanceof ManagerConfigurationError && err.message === "invalid_manager_map_config"
     );
 
-    // 4. Verify apiError maps configuration errors safely to 500
+    // 4. Strict UUID validation for manager ID
+    assert.throws(
+      () => parseManagerMap(JSON.stringify({ [TEST_MANAGER_EMAIL]: "invalid-non-uuid-string" })),
+      (err: unknown) => err instanceof ManagerConfigurationError && err.message === "invalid_manager_id_uuid"
+    );
+    assert.throws(
+      () => parseManagerMap({ [TEST_MANAGER_EMAIL]: "12345" }),
+      (err: unknown) => err instanceof ManagerConfigurationError && err.message === "invalid_manager_id_uuid"
+    );
+
+    // 5. Rejection of duplicate email mappings (both case-identical and case-variant)
+    assert.throws(
+      () =>
+        parseManagerMap(
+          `{"${TEST_MANAGER_EMAIL}":"${TEST_MANAGER_ID}","${TEST_MANAGER_EMAIL}":"550e8400-e29b-41d4-a716-446655440001"}`
+        ),
+      (err: unknown) => err instanceof ManagerConfigurationError && err.message === "duplicate_manager_email_config"
+    );
+    assert.throws(
+      () =>
+        parseManagerMap(
+          `{"Manager@Salamat-Mebel.KZ":"${TEST_MANAGER_ID}","manager@salamat-mebel.kz":"550e8400-e29b-41d4-a716-446655440001"}`
+        ),
+      (err: unknown) => err instanceof ManagerConfigurationError && err.message === "duplicate_manager_email_config"
+    );
+
+    // 6. Verify apiError maps configuration errors safely to 500
     const err = new ManagerConfigurationError("missing_access_issuer_config");
     const response = apiError(err);
     assert.equal(response.status, 500);
     // Payload should only contain generic error, no secrets
     const body = await response.json();
     assert.deepEqual(body, { error: "internal_error" });
+  });
+
+  await t.test("enforces strict manager tenant isolation (IDOR protection)", async () => {
+    const MANAGER_B_EMAIL = "manager_b@salamat-mebel.kz";
+    const MANAGER_B_ID = "660e8400-e29b-41d4-a716-446655440001";
+
+    const multiManagerMap = JSON.stringify({
+      [TEST_MANAGER_EMAIL]: TEST_MANAGER_ID,
+      [MANAGER_B_EMAIL]: MANAGER_B_ID,
+    });
+
+    // Token signed for Manager A
+    const jwtA = await createTestJwt({ email: TEST_MANAGER_EMAIL });
+    const idA = await requireManagerId(new Headers({ "Cf-Access-Jwt-Assertion": jwtA }), {
+      issuer: TEST_ISSUER,
+      audience: TEST_AUD,
+      managerMap: multiManagerMap,
+      jwks: publicKey,
+    });
+    assert.equal(idA, TEST_MANAGER_ID);
+
+    // Token signed for Manager B
+    const jwtB = await createTestJwt({ email: MANAGER_B_EMAIL });
+    const idB = await requireManagerId(new Headers({ "Cf-Access-Jwt-Assertion": jwtB }), {
+      issuer: TEST_ISSUER,
+      audience: TEST_AUD,
+      managerMap: multiManagerMap,
+      jwks: publicKey,
+    });
+    assert.equal(idB, MANAGER_B_ID);
+
+    // Ensure they never cross-contaminate
+    assert.notEqual(idA, idB);
   });
 });
