@@ -1,7 +1,7 @@
 import "server-only";
 
 import { MiniBaseError, MiniBaseServerClient, type MiniBaseRecord } from "@/lib/minibase/server-client";
-import { getProposal } from "@/lib/proposals/repository";
+import { getProposal, ProposalDomainError } from "@/lib/proposals/repository";
 import type { Kp, KpItem, KpItemVariant, KpOptionGroup, KpOptionValue } from "@/types";
 import type {
   KpItemFormData,
@@ -12,19 +12,10 @@ import type {
   KpSimpleAddOnFormData,
 } from "@/lib/validation";
 
+export { ProposalDomainError };
+
 const MAX_ITEMS_PER_KP = 50;
 const MAX_VARIANTS_PER_ITEM = 3;
-
-export class ProposalDomainError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-    public readonly status: number = 400,
-  ) {
-    super(message);
-    this.name = "ProposalDomainError";
-  }
-}
 
 export type StoredKpItem = Omit<KpItem, "id"> & {
   owner_id: string;
@@ -233,6 +224,127 @@ export async function deleteProposalItem(
 
   await client.delete(itemsCollectionFor(ownerId), itemId);
   return true;
+}
+
+export async function deleteAllProposalItemsForKp(
+  ownerId: string,
+  kpId: string,
+  client: MiniBaseServerClient = MiniBaseServerClient.fromEnvironment(),
+): Promise<void> {
+  const all = await listAllOwnerItemRecords(ownerId, client);
+  const kpItems = all.filter((record) => record.data.kp_id === kpId);
+  const collection = itemsCollectionFor(ownerId);
+
+  for (const record of kpItems) {
+    for (const mediaPath of [record.data.original_image_url || record.data.image_url, record.data.sketch_image_url]) {
+      if (mediaPath && !/^https?:\/\//.test(mediaPath)) {
+        try {
+          await client.deleteFile(mediaPath);
+        } catch {
+          // Best-effort cleanup
+        }
+      }
+    }
+    await client.delete(collection, record.id);
+  }
+}
+
+function extensionForMediaPath(path: string, contentType: string | null): string {
+  const fromPath = path.split(".").pop()?.toLowerCase();
+  if (fromPath && /^[a-z0-9]{1,10}$/.test(fromPath)) return fromPath;
+  if (contentType === "image/png") return "png";
+  if (contentType === "image/webp") return "webp";
+  return "jpg";
+}
+
+async function cloneItemMediaFile(
+  sourcePath: string | null,
+  targetKpId: string,
+  targetItemId: string,
+  kind: "original" | "sketch" | "image",
+  client: MiniBaseServerClient,
+): Promise<string | null> {
+  if (!sourcePath || /^https?:\/\//.test(sourcePath)) return sourcePath;
+
+  const source = await client.downloadFile(sourcePath);
+  const extension = extensionForMediaPath(sourcePath, source.headers.get("content-type"));
+  const targetPath = `${targetKpId}/items/${targetItemId}-${kind}-${crypto.randomUUID()}.${extension}`;
+  await client.uploadFile(targetPath, await source.blob());
+  return targetPath;
+}
+
+export async function cloneProposalItems(
+  ownerId: string,
+  sourceKpId: string,
+  targetKpId: string,
+  client: MiniBaseServerClient = MiniBaseServerClient.fromEnvironment(),
+): Promise<KpItemWithDetails[]> {
+  const sourceItems = await listProposalItems(ownerId, sourceKpId, client);
+  const collection = itemsCollectionFor(ownerId);
+  const now = new Date().toISOString();
+  const cloned: KpItemWithDetails[] = [];
+
+  for (const item of sourceItems) {
+    const newItemId = crypto.randomUUID();
+    const clonedOriginalImage = await cloneItemMediaFile(
+      item.original_image_url,
+      targetKpId,
+      newItemId,
+      "original",
+      client,
+    );
+    const clonedSketchImage = await cloneItemMediaFile(
+      item.sketch_image_url,
+      targetKpId,
+      newItemId,
+      "sketch",
+      client,
+    );
+    const clonedImage =
+      item.image_url === item.original_image_url
+        ? clonedOriginalImage
+        : await cloneItemMediaFile(item.image_url, targetKpId, newItemId, "image", client);
+    const clonedVariants: KpItemVariant[] = item.variants.map((variant) => ({
+      ...variant,
+      id: crypto.randomUUID(),
+      item_id: newItemId,
+    }));
+
+    const clonedOptionGroups: KpOptionGroup[] = item.option_groups.map((group) => {
+      const newGroupId = crypto.randomUUID();
+      return {
+        ...group,
+        id: newGroupId,
+        item_id: newItemId,
+        values: group.values.map((val) => ({
+          ...val,
+          id: crypto.randomUUID(),
+          group_id: newGroupId,
+        })),
+      };
+    });
+
+    const data: StoredKpItem = {
+      owner_id: ownerId,
+      kp_id: targetKpId,
+      name: item.name,
+      description: item.description,
+      dimensions: item.dimensions,
+      quantity: item.quantity,
+      image_url: clonedImage,
+      sort_order: item.sort_order,
+      item_type: item.item_type,
+      original_image_url: clonedOriginalImage,
+      sketch_image_url: clonedSketchImage,
+      variants: clonedVariants,
+      option_groups: clonedOptionGroups,
+    };
+
+    await client.put(collection, newItemId, data);
+    cloned.push(toKpItemWithDetails({ id: newItemId, data, createdAt: now, updatedAt: now }));
+  }
+
+  return cloned;
 }
 
 export async function reorderProposalItems(

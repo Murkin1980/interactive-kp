@@ -3,8 +3,17 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { listProposalItems } from "@/lib/proposals/browser-api";
+import {
+  deleteProposal,
+  downloadProposalSnapshotPdf,
+  duplicateProposal,
+  getProposal,
+  listProposalApprovalSnapshots,
+  listProposalItems,
+  publishProposal,
+  reopenProposalForRevision,
+  updateProposal,
+} from "@/lib/proposals/browser-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,13 +22,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { calculateKp } from "@/lib/utils/calculation";
 import ItemManager from "./item-manager";
-import type { Kp, KpApprovalSnapshot, KpItem, KpItemVariant } from "@/types";
+import type { DiscountType, Kp, KpApprovalSnapshot, KpItem, KpItemVariant } from "@/types";
 
 export default function ProposalDetailForm() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
-  const supabase = createClient();
 
   const [kp, setKp] = useState<Kp | null>(null);
   const [items, setItems] = useState<(KpItem & { variants: KpItemVariant[] })[]>([]);
@@ -43,31 +51,33 @@ export default function ProposalDetailForm() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [reopenArmed, setReopenArmed] = useState(false);
 
+  const getErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : String(error);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       setLoading(true);
 
-      const { data: kpData } = await supabase
-        .from("kps")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (!cancelled && kpData) {
-        setKp(kpData);
-        setFormData({
-          client_name: kpData.client_name || "",
-          client_phone: kpData.client_phone || "",
-          project_name: kpData.project_name || "",
-          number: kpData.number || "",
-          valid_until: kpData.valid_until || "",
-          notes: kpData.notes || "",
-          advance_percent: kpData.advance_percent ?? 50,
-          balance_condition: kpData.balance_condition || "",
-          discount_type: kpData.discount_type || "none",
-          discount_value: kpData.discount_value ?? 0,
-        });
+      try {
+        const kpData = await getProposal(id);
+        if (!cancelled && kpData) {
+          setKp(kpData);
+          setFormData({
+            client_name: kpData.client_name || "",
+            client_phone: kpData.client_phone || "",
+            project_name: kpData.project_name || "",
+            number: kpData.number || "",
+            valid_until: kpData.valid_until || "",
+            notes: kpData.notes || "",
+            advance_percent: kpData.advance_percent ?? 50,
+            balance_condition: kpData.balance_condition || "",
+            discount_type: kpData.discount_type || "none",
+            discount_value: kpData.discount_value ?? 0,
+          });
+        }
+      } catch (err) {
+        console.error("[ProposalDetailForm] Failed to load proposal:", err);
       }
 
       try {
@@ -90,8 +100,12 @@ export default function ProposalDetailForm() {
         console.error("[ProposalDetailForm] Failed to load items:", err);
       }
 
-      const { data: snapshotData } = await supabase.from("kp_approval_snapshots").select("*").eq("kp_id", id).order("version", { ascending: false });
-      if (!cancelled && snapshotData) setSnapshots(snapshotData as KpApprovalSnapshot[]);
+      try {
+        const snapshotData = await listProposalApprovalSnapshots(id);
+        if (!cancelled) setSnapshots(snapshotData);
+      } catch (err) {
+        console.error("[ProposalDetailForm] Failed to load snapshots:", err);
+      }
 
       if (!cancelled) {
         setLoading(false);
@@ -100,7 +114,7 @@ export default function ProposalDetailForm() {
     return () => {
       cancelled = true;
     };
-  }, [id, supabase]);
+  }, [id]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,9 +133,8 @@ export default function ProposalDetailForm() {
       return;
     }
 
-    const { error } = await supabase
-      .from("kps")
-      .update({
+    try {
+      const updated = await updateProposal(id, {
         client_name: formData.client_name,
         client_phone: formData.client_phone || null,
         project_name: formData.project_name,
@@ -130,60 +143,49 @@ export default function ProposalDetailForm() {
         notes: formData.notes || null,
         advance_percent: formData.advance_percent,
         balance_condition: formData.balance_condition || null,
-        discount_type: formData.discount_type,
+        discount_type: (formData.discount_type as DiscountType) || "none",
         discount_value: formData.discount_value,
-      })
-      .eq("id", id);
-
-    if (error) {
-      setErrors({ root: "Ошибка сохранения: " + error.message });
+      });
+      setKp(updated);
       setSaving(false);
-      return;
+      router.refresh();
+    } catch (error) {
+      setErrors({ root: "Ошибка сохранения: " + getErrorMessage(error) });
+      setSaving(false);
     }
-
-    setSaving(false);
-    router.refresh();
   };
 
   const handleDelete = async () => {
     if (!confirm("Удалить это КП? Это действие нельзя отменить.")) return;
 
-    const { error } = await supabase.from("kps").delete().eq("id", id);
-    if (!error) {
+    try {
+      await deleteProposal(id);
       router.push("/proposals");
-      return;
+    } catch (error) {
+      setErrors({ root: "Ошибка удаления: " + getErrorMessage(error) });
     }
-    setErrors({ root: "Ошибка удаления: " + error.message });
   };
 
   const handlePublish = async () => {
     if (!kp) return;
     setErrors({});
-    const { error } = await supabase
-      .from("kps")
-      .update({ status: "sent" })
-      .eq("id", id);
-
-    if (!error) {
-      setKp({ ...kp, status: "sent" });
-      return;
+    try {
+      const updated = await publishProposal(id);
+      setKp(updated);
+    } catch (error) {
+      setErrors({ root: "Не удалось опубликовать КП: " + getErrorMessage(error) });
     }
-    setErrors({ root: "Не удалось опубликовать КП: " + error.message });
   };
 
   const handleDuplicate = async () => {
     if (!kp) return;
-    const { data: newKpId, error: dupError } = await supabase.rpc(
-      "duplicate_kp",
-      { p_kp_id: kp.id }
-    );
-
-    if (dupError || !newKpId) {
-      setErrors({ root: "Ошибка дублирования: " + (dupError?.message ?? "Неизвестная ошибка") });
-      return;
+    setErrors({});
+    try {
+      const duplicated = await duplicateProposal(kp.id);
+      router.push(`/proposals/${duplicated.id}`);
+    } catch (error) {
+      setErrors({ root: "Ошибка дублирования: " + getErrorMessage(error) });
     }
-
-    router.push(`/proposals/${newKpId}`);
   };
 
   const handleReopenRevision = async () => {
@@ -193,23 +195,29 @@ export default function ProposalDetailForm() {
       return;
     }
     setErrors({});
-    const { data, error } = await supabase.rpc("reopen_kp_for_revision", { p_kp_id: kp.id });
-    if (error) {
-      setErrors({ root: "Не удалось создать новую редакцию: " + error.message });
-      return;
+    try {
+      const reopened = await reopenProposalForRevision(kp.id);
+      setKp(reopened);
+      setReopenArmed(false);
+      router.refresh();
+    } catch (error) {
+      setErrors({ root: "Не удалось создать новую редакцию: " + getErrorMessage(error) });
     }
-    const revision = (data as { revision?: number } | null)?.revision ?? kp.current_revision + 1;
-    setKp({ ...kp, status: "sent", current_revision: revision, confirmed_at: null, selected_total: null });
-    router.refresh();
   };
 
   const handleDownloadPdf = async (snapshot: KpApprovalSnapshot) => {
     if (!snapshot.pdf_storage_path) return;
-    const { data, error } = await supabase.storage.from("kp-media").download(snapshot.pdf_storage_path);
-    if (error) { setErrors({ root: "Не удалось скачать PDF: " + error.message }); return; }
-    const url = URL.createObjectURL(data); const anchor = document.createElement("a");
-    anchor.href = url; anchor.download = `${kp?.number || "KP"}-v${snapshot.version}.pdf`; anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    try {
+      const data = await downloadProposalSnapshotPdf(id, snapshot.id);
+      const url = URL.createObjectURL(data);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${kp?.number || "KP"}-v${snapshot.version}.pdf`;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setErrors({ root: "Не удалось скачать PDF: " + getErrorMessage(error) });
+    }
   };
 
   const getPublicUrl = () => {

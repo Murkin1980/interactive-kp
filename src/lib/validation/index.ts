@@ -16,9 +16,9 @@ export const clientSchema = z.object({
 
 export const kpSchema = z.object({
   client_id: optionalNull(z.string().uuid()),
-  client_name: z.string().min(1, "Обязательное поле"),
+  client_name: z.string().trim().min(1, "Обязательное поле"),
   client_phone: optionalNull(z.string()),
-  project_name: z.string().min(1, "Обязательное поле"),
+  project_name: z.string().trim().min(1, "Обязательное поле"),
   number: z.string().optional(),
   valid_until: optionalNull(z.string()),
   notes: optionalNull(z.string()),
@@ -26,7 +26,26 @@ export const kpSchema = z.object({
   balance_condition: optionalNull(z.string()),
   discount_type: z.enum(["none", "percent", "fixed"]).default("none"),
   discount_value: z.number().min(0).default(0),
-});
+}).refine(
+  (data) => data.discount_type !== "percent" || data.discount_value <= 100,
+  { message: "Процентная скидка не может превышать 100%", path: ["discount_value"] },
+);
+
+export const kpUpdateSchema = z.object({
+  client_name: z.string().trim().min(1, "Обязательное поле"),
+  client_phone: optionalNull(z.string()),
+  project_name: z.string().trim().min(1, "Обязательное поле"),
+  number: optionalNull(z.string()),
+  valid_until: optionalNull(z.string()),
+  notes: optionalNull(z.string()),
+  advance_percent: z.number().min(0).max(100).default(0),
+  balance_condition: optionalNull(z.string()),
+  discount_type: z.enum(["none", "percent", "fixed"]).default("none"),
+  discount_value: z.number().min(0).default(0),
+}).refine(
+  (data) => data.discount_type !== "percent" || data.discount_value <= 100,
+  { message: "Процентная скидка не может превышать 100%", path: ["discount_value"] },
+);
 
 export const kpItemSchema = z.object({
   name: z.string().min(1, "Обязательное поле"),
@@ -82,6 +101,7 @@ export const kpSimpleAddOnSchema = z.object({
 
 export type ClientFormData = z.infer<typeof clientSchema>;
 export type KpFormData = z.infer<typeof kpSchema>;
+export type KpUpdateData = z.infer<typeof kpUpdateSchema>;
 export type KpItemFormData = z.infer<typeof kpItemSchema>;
 export type KpItemUpdateData = z.infer<typeof kpItemUpdateSchema>;
 export type KpItemVariantFormData = z.infer<typeof kpItemVariantSchema>;

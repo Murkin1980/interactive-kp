@@ -1,4 +1,4 @@
-import type { Kp, KpItem, KpItemVariant, KpOptionGroup } from "@/types";
+import type { Kp, KpApprovalSnapshot, KpItem, KpItemVariant, KpOptionGroup } from "@/types";
 import type {
   KpFormData,
   KpItemFormData,
@@ -7,6 +7,7 @@ import type {
   KpOptionGroupFormData,
   KpOptionValueFormData,
   KpSimpleAddOnFormData,
+  KpUpdateData,
 } from "@/lib/validation";
 
 export type KpItemRecord = KpItem & {
@@ -17,9 +18,15 @@ export type KpItemRecord = KpItem & {
 async function parseApiError(response: Response, fallbackPrefix: string): Promise<never> {
   let message = `${fallbackPrefix}_${response.status}`;
   try {
-    const body = (await response.json()) as { message?: unknown; error?: unknown };
+    const body = (await response.json()) as {
+      message?: unknown;
+      error?: unknown;
+      issues?: Array<{ message?: unknown }>;
+    };
     if (typeof body.message === "string" && body.message.trim()) {
       message = body.message;
+    } else if (Array.isArray(body.issues) && typeof body.issues[0]?.message === "string") {
+      message = body.issues[0].message;
     } else if (typeof body.error === "string" && body.error.trim()) {
       message = body.error;
     }
@@ -46,8 +53,70 @@ export async function listProposals(): Promise<Kp[]> {
   return (await json<{ proposals: Kp[] }>("/api/proposals")).proposals;
 }
 
+export async function getProposal(id: string): Promise<Kp | null> {
+  const response = await fetch(`/api/proposals/${encodeURIComponent(id)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) return parseApiError(response, "proposals_api");
+  return ((await response.json()) as { proposal: Kp }).proposal;
+}
+
 export async function createProposal(input: KpFormData): Promise<Kp> {
   return (await json<{ proposal: Kp }>("/api/proposals", { method: "POST", body: JSON.stringify(input) })).proposal;
+}
+
+export async function updateProposal(id: string, input: KpUpdateData): Promise<Kp> {
+  return (
+    await json<{ proposal: Kp }>(`/api/proposals/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    })
+  ).proposal;
+}
+
+export async function deleteProposal(id: string): Promise<void> {
+  await json<void>(`/api/proposals/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function publishProposal(id: string): Promise<Kp> {
+  return (
+    await json<{ proposal: Kp }>(`/api/proposals/${encodeURIComponent(id)}/publish`, {
+      method: "POST",
+    })
+  ).proposal;
+}
+
+export async function duplicateProposal(id: string): Promise<Kp> {
+  return (
+    await json<{ proposal: Kp }>(`/api/proposals/${encodeURIComponent(id)}/duplicate`, {
+      method: "POST",
+    })
+  ).proposal;
+}
+
+export async function reopenProposalForRevision(id: string): Promise<Kp> {
+  return (
+    await json<{ proposal: Kp }>(`/api/proposals/${encodeURIComponent(id)}/reopen`, {
+      method: "POST",
+    })
+  ).proposal;
+}
+
+export async function listProposalApprovalSnapshots(kpId: string): Promise<KpApprovalSnapshot[]> {
+  return (
+    await json<{ snapshots: KpApprovalSnapshot[] }>(
+      `/api/proposals/${encodeURIComponent(kpId)}/snapshots`,
+    )
+  ).snapshots;
+}
+
+export async function downloadProposalSnapshotPdf(kpId: string, snapshotId: string): Promise<Blob> {
+  const response = await fetch(
+    `/api/proposals/${encodeURIComponent(kpId)}/snapshots/${encodeURIComponent(snapshotId)}/pdf`,
+  );
+  if (!response.ok) return parseApiError(response, "proposals_pdf_api");
+  return response.blob();
 }
 
 /* ─── Proposal Items ─── */
