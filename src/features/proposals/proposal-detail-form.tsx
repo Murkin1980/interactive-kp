@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { listProposalItems } from "@/lib/proposals/browser-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,26 +70,24 @@ export default function ProposalDetailForm() {
         });
       }
 
-      const { data: itemsData } = await supabase
-        .from("kp_items")
-        .select("*, variants:kp_item_variants(*)")
-        .eq("kp_id", id)
-        .order("sort_order");
+      try {
+        const itemsData = await listProposalItems(id);
+        if (!cancelled) {
+          setItems(itemsData);
 
-      if (!cancelled && itemsData) {
-        const typedItems = itemsData as (KpItem & { variants: KpItemVariant[] })[];
-        setItems(typedItems);
-
-        const defaultSelections: Record<string, string> = {};
-        for (const item of typedItems) {
-          const defaultVariant = item.variants.find((v) => v.is_default);
-          if (defaultVariant) {
-            defaultSelections[item.id] = defaultVariant.id;
-          } else if (item.variants.length > 0) {
-            defaultSelections[item.id] = item.variants[0].id;
+          const defaultSelections: Record<string, string> = {};
+          for (const item of itemsData) {
+            const defaultVariant = item.variants.find((v) => v.is_default);
+            if (defaultVariant) {
+              defaultSelections[item.id] = defaultVariant.id;
+            } else if (item.variants.length > 0) {
+              defaultSelections[item.id] = item.variants[0].id;
+            }
           }
+          setSelectedVariants(defaultSelections);
         }
-        setSelectedVariants(defaultSelections);
+      } catch (err) {
+        console.error("[ProposalDetailForm] Failed to load items:", err);
       }
 
       const { data: snapshotData } = await supabase.from("kp_approval_snapshots").select("*").eq("kp_id", id).order("version", { ascending: false });

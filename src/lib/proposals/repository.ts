@@ -41,9 +41,13 @@ function toKp(record: MiniBaseRecord<StoredKp>): Kp {
   };
 }
 
-async function ownedRecord(id: string, ownerId: string): Promise<MiniBaseRecord<StoredKp> | null> {
+async function ownedRecord(
+  id: string,
+  ownerId: string,
+  client: MiniBaseServerClient = MiniBaseServerClient.fromEnvironment(),
+): Promise<MiniBaseRecord<StoredKp> | null> {
   try {
-    const record = await MiniBaseServerClient.fromEnvironment().get<StoredKp>(collectionFor(ownerId), id);
+    const record = await client.get<StoredKp>(collectionFor(ownerId), id);
     return record.data.owner_id === ownerId ? record : null;
   } catch (error) {
     if (error instanceof MiniBaseError && error.status === 404) return null;
@@ -110,8 +114,12 @@ export async function listProposals(ownerId: string): Promise<Kp[]> {
     .map(toKp);
 }
 
-export async function getProposal(id: string, ownerId: string): Promise<Kp | null> {
-  const record = await ownedRecord(id, ownerId);
+export async function getProposal(
+  id: string,
+  ownerId: string,
+  client: MiniBaseServerClient = MiniBaseServerClient.fromEnvironment(),
+): Promise<Kp | null> {
+  const record = await ownedRecord(id, ownerId, client);
   return record ? toKp(record) : null;
 }
 

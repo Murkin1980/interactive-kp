@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { ManagerAuthenticationError } from "@/lib/auth/manager-session";
 import { MiniBaseError } from "@/lib/minibase/server-client";
+import { ProposalDomainError } from "@/lib/proposals/items-repository";
 
 export function apiError(error: unknown): NextResponse {
   if (error instanceof ManagerAuthenticationError) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  if (error instanceof ProposalDomainError) {
+    return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
   }
   if (error instanceof MiniBaseError) {
     console.error("MiniBase request failed", { code: error.code, status: error.status });

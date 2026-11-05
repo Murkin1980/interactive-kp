@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import {
+  addItemOptionGroup,
+  addItemOptionValue,
+  addItemSimpleAddOn,
+  deleteItemOptionGroup,
+  listItemOptionGroups,
+} from "@/lib/proposals/browser-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { KpOptionGroup } from "@/types";
@@ -9,62 +15,78 @@ import type { KpOptionGroup } from "@/types";
 const money = new Intl.NumberFormat("ru-RU");
 
 export default function OptionManager({ itemId, readOnly }: { itemId: string; readOnly: boolean }) {
-  const supabase = createClient();
   const [groups, setGroups] = useState<KpOptionGroup[]>([]);
   const [groupName, setGroupName] = useState("");
   const [addOnDraft, setAddOnDraft] = useState({ name: "", price: "" });
   const [valueDrafts, setValueDrafts] = useState<Record<string, { name: string; brand: string; price: string }>>({});
   const [busy, setBusy] = useState(false);
 
+  const getErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : String(error);
+
   const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("kp_option_groups")
-      .select("*, values:kp_option_values(*)")
-      .eq("item_id", itemId)
-      .order("sort_order");
-    if (error) throw error;
-    setGroups((data ?? []) as KpOptionGroup[]);
-  }, [itemId, supabase]);
+    const data = await listItemOptionGroups(itemId);
+    setGroups(data);
+  }, [itemId]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data, error } = await supabase
-        .from("kp_option_groups")
-        .select("*, values:kp_option_values(*)")
-        .eq("item_id", itemId)
-        .order("sort_order");
-      if (error) console.error("[OptionManager]", error);
-      else if (!cancelled) setGroups((data ?? []) as KpOptionGroup[]);
+      try {
+        const data = await listItemOptionGroups(itemId);
+        if (!cancelled) setGroups(data);
+      } catch (error) {
+        console.error("[OptionManager]", error);
+      }
     })();
     return () => { cancelled = true; };
-  }, [itemId, supabase]);
+  }, [itemId]);
 
   const addGroup = async () => {
     const name = groupName.trim();
     if (!name) return;
     setBusy(true);
-    const slugBase = name.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-").replace(/^-|-$/g, "");
-    const slug = `${slugBase || "option"}-${Date.now().toString(36)}`.replace(/[а-я]/gi, "opt").slice(0, 50);
-    const { error } = await supabase.from("kp_option_groups").insert({ item_id: itemId, name, slug, sort_order: groups.length });
-    if (error) alert(error.message); else { setGroupName(""); await load(); }
-    setBusy(false);
+    try {
+      const slugBase = name.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-").replace(/^-|-$/g, "");
+      const slug = `${slugBase || "option"}-${Date.now().toString(36)}`.replace(/[а-я]/gi, "opt").slice(0, 50);
+      const { groups: nextGroups } = await addItemOptionGroup(itemId, {
+        name,
+        slug,
+        description: null,
+        is_required: true,
+        sort_order: groups.length,
+      });
+      setGroupName("");
+      setGroups(nextGroups);
+    } catch (error) {
+      alert(getErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const addValue = async (group: KpOptionGroup) => {
     const draft = valueDrafts[group.id];
     if (!draft?.name.trim()) return;
     setBusy(true);
-    const { error } = await supabase.from("kp_option_values").insert({
-      group_id: group.id,
-      name: draft.name.trim(),
-      brand: draft.brand.trim() || null,
-      price_delta: Number(draft.price) || 0,
-      is_default: group.values.length === 0,
-      sort_order: group.values.length,
-    });
-    if (error) alert(error.message); else { setValueDrafts((current) => ({ ...current, [group.id]: { name: "", brand: "", price: "" } })); await load(); }
-    setBusy(false);
+    try {
+      const nextGroups = await addItemOptionValue(itemId, group.id, {
+        name: draft.name.trim(),
+        brand: draft.brand.trim() || null,
+        description: null,
+        image_url: null,
+        price_delta: Number(draft.price) || 0,
+        production_days_delta: 0,
+        is_default: group.values.length === 0,
+        sort_order: group.values.length,
+      });
+      setValueDrafts((current) => ({ ...current, [group.id]: { name: "", brand: "", price: "" } }));
+      setGroups(nextGroups);
+    } catch (error) {
+      alert(getErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const addSimpleAddOn = async () => {
@@ -72,36 +94,28 @@ export default function OptionManager({ itemId, readOnly }: { itemId: string; re
     const price = Number(addOnDraft.price);
     if (!name || !Number.isFinite(price) || price <= 0) return;
     setBusy(true);
-    const slug = `addon-${Date.now().toString(36)}`;
-    const { data: group, error: groupError } = await supabase
-      .from("kp_option_groups")
-      .insert({ item_id: itemId, name, slug, is_required: false, sort_order: groups.length })
-      .select("id")
-      .single();
-    if (groupError || !group) {
-      alert(groupError?.message || "Не удалось создать дополнительную опцию");
-      setBusy(false);
-      return;
-    }
-    const { error: valuesError } = await supabase.from("kp_option_values").insert([
-      { group_id: group.id, name: `Без ${name.toLocaleLowerCase("ru-RU")}`, price_delta: 0, is_default: true, sort_order: 0 },
-      { group_id: group.id, name, price_delta: price, is_default: false, sort_order: 1 },
-    ]);
-    if (valuesError) {
-      await supabase.from("kp_option_groups").delete().eq("id", group.id);
-      alert(valuesError.message);
-    } else {
+    try {
+      const { groups: nextGroups } = await addItemSimpleAddOn(itemId, { name, price });
       setAddOnDraft({ name: "", price: "" });
-      await load();
+      setGroups(nextGroups);
+    } catch (error) {
+      alert(getErrorMessage(error) || "Не удалось создать дополнительную опцию");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const removeGroup = async (id: string) => {
     if (!confirm("Удалить группу и все её варианты?")) return;
-    const { error } = await supabase.from("kp_option_groups").delete().eq("id", id);
-    if (error) alert(error.message); else await load();
+    try {
+      const nextGroups = await deleteItemOptionGroup(itemId, id);
+      setGroups(nextGroups);
+    } catch (error) {
+      alert(getErrorMessage(error));
+      await load().catch(() => undefined);
+    }
   };
+
 
   return (
     <section className="mt-5 border-t border-[#c8d6db] pt-5">
