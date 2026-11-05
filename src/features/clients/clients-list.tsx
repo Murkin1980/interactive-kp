@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { listClients } from "@/lib/clients/browser-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -11,22 +11,15 @@ import type { Client } from "@/types";
 export default function ClientsContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
-
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase
-        .from("clients")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (!cancelled && data) {
-        setClients(data);
-      }
+      const data = await listClients().catch(() => []);
+      if (!cancelled) setClients(data);
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [supabase]);
+  }, []);
 
   return (
     <AppLayout>

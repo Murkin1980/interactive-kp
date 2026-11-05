@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { deleteClient, getClient, updateClient } from "@/lib/clients/browser-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,16 +25,11 @@ export default function ClientDetailForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("id", id)
-        .single();
+      const data = await getClient(id).catch(() => null);
       if (!cancelled && data) {
         setClient(data);
         setFormData({
@@ -47,14 +42,10 @@ export default function ClientDetailForm() {
       }
     })();
     return () => { cancelled = true; };
-  }, [id, supabase]);
+  }, [id]);
 
   const refetch = async () => {
-    const { data } = await supabase
-      .from("clients")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const data = await getClient(id).catch(() => null);
     if (data) {
       setClient(data);
       setFormData({
@@ -85,18 +76,9 @@ export default function ClientDetailForm() {
       return;
     }
 
-    const { error } = await supabase
-      .from("clients")
-      .update({
-        name: formData.name,
-        phone: formData.phone || null,
-        email: formData.email || null,
-        address: formData.address || null,
-        notes: formData.notes || null,
-      })
-      .eq("id", id);
-
-    if (error) {
+    try {
+      await updateClient(id, result.data);
+    } catch {
       setErrors({ root: "Ошибка сохранения" });
       setLoading(false);
       return;
@@ -110,10 +92,11 @@ export default function ClientDetailForm() {
   const handleDelete = async () => {
     if (!confirm("Удалить клиента?")) return;
 
-    const { error } = await supabase.from("clients").delete().eq("id", id);
-
-    if (!error) {
+    try {
+      await deleteClient(id);
       router.push("/clients");
+    } catch {
+      setErrors({ root: "Ошибка удаления" });
     }
   };
 

@@ -1,10 +1,22 @@
 "use client";
 
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { ImagePlus, Loader2, Trash2, Upload } from "lucide-react";
 import type { KpItem, KpItemVariant } from "@/types";
-import { createClient } from "@/lib/supabase/client";
+import {
+  addProposalVariant,
+  createProposalItem,
+  deleteProposalItem,
+  deleteProposalItemPhoto,
+  deleteProposalVariant,
+  getProposalItemPhotoPreviewUrl,
+  reorderProposalItems,
+  setDefaultProposalVariant,
+  updateProposalItem,
+  updateProposalVariant,
+  uploadProposalItemPhoto,
+} from "@/lib/proposals/browser-api";
 import {
   Card,
   CardContent,
@@ -63,14 +75,12 @@ export default function ItemManager({
   onItemsChange,
   readOnly = false,
 }: ItemManagerProps) {
-  const supabase = useMemo(() => createClient(), []);
-
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
   const [addingItem, setAddingItem] = useState(false);
   const [addingVariantForItemId, setAddingVariantForItemId] = useState<
     string | null
-  >(null );
+  >(null);
 
   const [itemForm, setItemForm] = useState<ItemFormState>(EMPTY_ITEM_FORM);
   const [variantForm, setVariantForm] =
@@ -78,26 +88,25 @@ export default function ItemManager({
 
   const [submitting, setSubmitting] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const next: Record<string, string> = {};
-      const media = items.flatMap((item) => [
-        { key: `${item.id}:original`, path: item.original_image_url || item.image_url },
-        { key: `${item.id}:sketch`, path: item.sketch_image_url },
-      ]);
-      await Promise.all(media.map(async ({ key, path }) => {
-        if (!path) return;
-        if (/^https?:\/\//.test(path)) { next[key] = path; return; }
-        const { data } = await supabase.storage.from("kp-media").createSignedUrl(path, 3600);
-        if (data?.signedUrl) next[key] = data.signedUrl;
-      }));
-      if (!cancelled) setPreviewUrls(next);
-    })();
-    return () => { cancelled = true; };
-  }, [items, supabase]);
+  const previewUrls = useMemo(() => {
+    const next: Record<string, string> = {};
+    for (const item of items) {
+      const originalUrl = getProposalItemPhotoPreviewUrl(
+        item.id,
+        "original",
+        item.original_image_url || item.image_url,
+      );
+      if (originalUrl) next[`${item.id}:original`] = originalUrl;
+      const sketchUrl = getProposalItemPhotoPreviewUrl(
+        item.id,
+        "sketch",
+        item.sketch_image_url,
+      );
+      if (sketchUrl) next[`${item.id}:sketch`] = sketchUrl;
+    }
+    return next;
+  }, [items]);
 
   const getMaxSortOrder = useCallback(
     () => (items.length > 0 ? Math.max(...items.map((i) => i.sort_order ?? 0)) + 1 : 0),
@@ -131,19 +140,19 @@ export default function ItemManager({
     if (file.size > 10 * 1024 * 1024) { showError("Файл должен быть не больше 10 МБ."); return; }
     setUploadingItemId(itemId);
     try {
-      const { data: kp, error: kpError } = await supabase.from("kps").select("public_token").eq("id", kpId).single();
-      if (kpError) throw kpError;
-      const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-      const path = `${kpId}/${kp.public_token}/items/${itemId}-${kind}-${crypto.randomUUID()}.${extension}`;
-      const { error: uploadError } = await supabase.storage.from("kp-media").upload(path, file, { contentType: file.type, upsert: false });
-      if (uploadError) throw uploadError;
-      const current = items.find((item) => item.id === itemId);
-      const previous = kind === "original" ? (current?.original_image_url || current?.image_url) : current?.sketch_image_url;
-      const values = kind === "original" ? { original_image_url: path, image_url: path } : { sketch_image_url: path };
-      const { error: updateError } = await supabase.from("kp_items").update(values).eq("id", itemId);
-      if (updateError) { await supabase.storage.from("kp-media").remove([path]); throw updateError; }
-      if (previous && !/^https?:\/\//.test(previous)) await supabase.storage.from("kp-media").remove([previous]);
-      onItemsChange(items.map((item) => item.id === itemId ? { ...item, ...values } : item));
+      const updatedItem = await uploadProposalItemPhoto(itemId, kind, file);
+      onItemsChange(
+        items.map((item) =>
+          item.id === itemId
+            ? {
+                ...item,
+                image_url: updatedItem.image_url,
+                original_image_url: updatedItem.original_image_url,
+                sketch_image_url: updatedItem.sketch_image_url,
+              }
+            : item,
+        ),
+      );
     } catch (error) { showError(getErrorMessage(error) || "Не удалось загрузить фотографию"); }
     finally { setUploadingItemId(null); }
   };
@@ -154,11 +163,19 @@ export default function ItemManager({
     if (!item || !path || readOnly) return;
     setUploadingItemId(itemId);
     try {
-      const values = kind === "original" ? { original_image_url: null, image_url: null } : { sketch_image_url: null };
-      const { error } = await supabase.from("kp_items").update(values).eq("id", itemId);
-      if (error) throw error;
-      if (!/^https?:\/\//.test(path)) await supabase.storage.from("kp-media").remove([path]);
-      onItemsChange(items.map((candidate) => candidate.id === itemId ? { ...candidate, ...values } : candidate));
+      const updatedItem = await deleteProposalItemPhoto(itemId, kind);
+      onItemsChange(
+        items.map((candidate) =>
+          candidate.id === itemId
+            ? {
+                ...candidate,
+                image_url: updatedItem.image_url,
+                original_image_url: updatedItem.original_image_url,
+                sketch_image_url: updatedItem.sketch_image_url,
+              }
+            : candidate,
+        ),
+      );
     } catch (error) { showError(getErrorMessage(error) || "Не удалось удалить фотографию"); }
     finally { setUploadingItemId(null); }
   };
@@ -173,22 +190,15 @@ export default function ItemManager({
     }
     setSubmitting(true);
     try {
-      const { data, error } = await supabase
-        .from("kp_items")
-        .insert({
-          kp_id: kpId,
-          name: itemForm.name.trim(),
-          description: itemForm.description.trim() || null,
-          dimensions: itemForm.dimensions.trim() || null,
-          quantity: itemForm.quantity,
-          sort_order: getMaxSortOrder(),
-        })
-        .select()
-        .single();
+      const data = await createProposalItem(kpId, {
+        name: itemForm.name.trim(),
+        description: itemForm.description.trim() || null,
+        dimensions: itemForm.dimensions.trim() || null,
+        quantity: itemForm.quantity,
+        sort_order: getMaxSortOrder(),
+      });
 
-      if (error) throw error;
-
-      onItemsChange([...items, { ...data, variants: [] }]);
+      onItemsChange([...items, { ...data, variants: data.variants ?? [] }]);
       resetItemForm();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -206,27 +216,22 @@ export default function ItemManager({
     }
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from("kp_items")
-        .update({
-          name: itemForm.name.trim(),
-          description: itemForm.description.trim() || null,
-          dimensions: itemForm.dimensions.trim() || null,
-          quantity: itemForm.quantity,
-        })
-        .eq("id", itemId);
-
-      if (error) throw error;
+      const updated = await updateProposalItem(itemId, {
+        name: itemForm.name.trim(),
+        description: itemForm.description.trim() || null,
+        dimensions: itemForm.dimensions.trim() || null,
+        quantity: itemForm.quantity,
+      });
 
       onItemsChange(
         items.map((i) =>
           i.id === itemId
             ? {
                 ...i,
-                name: itemForm.name.trim(),
-                description: itemForm.description.trim() || null,
-                dimensions: itemForm.dimensions.trim() || null,
-                quantity: itemForm.quantity,
+                name: updated.name,
+                description: updated.description,
+                dimensions: updated.dimensions,
+                quantity: updated.quantity,
               }
             : i
         )
@@ -244,13 +249,7 @@ export default function ItemManager({
     if (!confirm("Удалить позицию и все её варианты?")) return;
     setSubmitting(true);
     try {
-      // Cascade delete is active in DB, so we only need to delete the item
-      const { error } = await supabase
-        .from("kp_items")
-        .delete()
-        .eq("id", itemId);
-
-      if (error) throw error;
+      await deleteProposalItem(itemId);
 
       onItemsChange(items.filter((i) => i.id !== itemId));
       if (editingItemId === itemId) resetItemForm();
@@ -279,12 +278,7 @@ export default function ItemManager({
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.rpc("reorder_kp_items", {
-        p_kp_id: kpId,
-        p_item_ids: itemIds,
-      });
-
-      if (error) throw error;
+      await reorderProposalItems(kpId, itemIds);
 
       const updated = newOrder.map((item, i) => ({
         ...item,
@@ -319,28 +313,17 @@ export default function ItemManager({
 
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.rpc("add_kp_variant", {
-        p_item_id: itemId,
-        p_name: variantForm.name.trim(),
-        p_material: variantForm.material.trim() || null,
-        p_hardware: variantForm.hardware.trim() || null,
-        p_description: variantForm.description.trim() || null,
-        p_price: variantForm.price,
-        p_is_default: variantForm.is_default,
+      const { variants: updatedVariants } = await addProposalVariant(itemId, {
+        name: variantForm.name.trim(),
+        material: variantForm.material.trim() || null,
+        hardware: variantForm.hardware.trim() || null,
+        description: variantForm.description.trim() || null,
+        price: variantForm.price,
+        is_default: variantForm.is_default,
       });
 
-      if (error) throw error;
-
-      const newVariant = data as KpItemVariant;
-
       onItemsChange(
-        items.map((i) => {
-          if (i.id !== itemId) return i;
-          const updatedVariants = variantForm.is_default
-            ? [...i.variants.map((v) => ({ ...v, is_default: false })), newVariant]
-            : [...i.variants, newVariant];
-          return { ...i, variants: updatedVariants };
-        })
+        items.map((i) => (i.id === itemId ? { ...i, variants: updatedVariants } : i))
       );
       resetVariantForm();
     } catch (err: unknown) {
@@ -365,35 +348,14 @@ export default function ItemManager({
     }
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from("kp_item_variants")
-        .update({
-          name: variantForm.name.trim(),
-          material: variantForm.material.trim() || null,
-          hardware: variantForm.hardware.trim() || null,
-          description: variantForm.description.trim() || null,
-          price: variantForm.price,
-        })
-        .eq("id", variantId);
-
-      if (error) throw error;
-
-      if (variantForm.is_default) {
-        const { error: rpcError } = await supabase.rpc("set_default_kp_variant", {
-          p_item_id: itemId,
-          p_variant_id: variantId,
-        });
-        if (rpcError) throw rpcError;
-      }
-
-      // Re-fetch updated variants list to ensure exact state sync
-      const { data: updatedVariants, error: fetchError } = await supabase
-        .from("kp_item_variants")
-        .select("*")
-        .eq("item_id", itemId)
-        .order("sort_order");
-
-      if (fetchError) throw fetchError;
+      const updatedVariants = await updateProposalVariant(itemId, variantId, {
+        name: variantForm.name.trim(),
+        material: variantForm.material.trim() || null,
+        hardware: variantForm.hardware.trim() || null,
+        description: variantForm.description.trim() || null,
+        price: variantForm.price,
+        is_default: variantForm.is_default,
+      });
 
       onItemsChange(
         items.map((i) => {
@@ -417,21 +379,7 @@ export default function ItemManager({
     if (!confirm("Удалить вариант?")) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase.rpc("delete_kp_variant", {
-        p_item_id: itemId,
-        p_variant_id: variantId,
-      });
-
-      if (error) throw error;
-
-      // Re-fetch updated variants list to keep UI default flags and deletion correct
-      const { data: updatedVariants, error: fetchError } = await supabase
-        .from("kp_item_variants")
-        .select("*")
-        .eq("item_id", itemId)
-        .order("sort_order");
-
-      if (fetchError) throw fetchError;
+      const updatedVariants = await deleteProposalVariant(itemId, variantId);
 
       onItemsChange(
         items.map((i) =>
@@ -455,22 +403,14 @@ export default function ItemManager({
     if (readOnly) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase.rpc("set_default_kp_variant", {
-        p_item_id: itemId,
-        p_variant_id: variantId,
-      });
-
-      if (error) throw error;
+      const updatedVariants = await setDefaultProposalVariant(itemId, variantId);
 
       onItemsChange(
         items.map((i) => {
           if (i.id !== itemId) return i;
           return {
             ...i,
-            variants: i.variants.map((v) => ({
-              ...v,
-              is_default: v.id === variantId,
-            })),
+            variants: updatedVariants,
           };
         })
       );
@@ -480,6 +420,7 @@ export default function ItemManager({
       setSubmitting(false);
     }
   };
+
 
   /* ─── Render helpers ─── */
 
