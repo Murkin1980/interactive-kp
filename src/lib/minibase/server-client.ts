@@ -12,6 +12,15 @@ export interface MiniBaseList<T extends Record<string, unknown>> {
   nextAfter: string | null;
 }
 
+export interface MiniBaseSeededSequenceInput<T extends Record<string, unknown>> {
+  counter: { collection: string; id: string };
+  record: { collection: string; id: string; data: T };
+  sequenceField: string;
+  prefix: string;
+  minimumDigits: number;
+  initialValue: number;
+}
+
 export class MiniBaseError extends Error {
   constructor(
     public readonly code: string,
@@ -120,6 +129,18 @@ export class MiniBaseServerClient {
 
   delete(collection: string, id: string): Promise<void> {
     return this.request(this.collectionPath(collection, id), { method: "DELETE" });
+  }
+
+  allocateSeededSequence<T extends Record<string, unknown>>(
+    input: MiniBaseSeededSequenceInput<T>,
+    idempotencyKey: string,
+  ): Promise<{ commandId: string; status: "applied"; record: { collection: string; id: string }; replayed: boolean }> {
+    if (!idempotencyKey || idempotencyKey.length > 100) throw new Error("invalid_idempotency_key");
+    return this.request("/v1/commands/records:allocate-seeded-sequence", {
+      method: "POST",
+      body: JSON.stringify(input),
+      headers: { "idempotency-key": idempotencyKey },
+    });
   }
 
   async downloadFile(path: string): Promise<Response> {

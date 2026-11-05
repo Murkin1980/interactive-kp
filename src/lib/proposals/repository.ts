@@ -10,6 +10,11 @@ function collectionFor(ownerId: string): string {
   return `proposals_${ownerId.toLowerCase()}`;
 }
 
+function counterCollectionFor(ownerId: string): string {
+  if (!/^[0-9a-f-]{36}$/i.test(ownerId)) throw new Error("invalid_owner_id");
+  return `proposal_counters_${ownerId.toLowerCase()}`;
+}
+
 type StoredKp = Omit<Kp, "id"> & { owner_id: string };
 
 function toKp(record: MiniBaseRecord<StoredKp>): Kp {
@@ -61,11 +66,11 @@ function getTodayPrefix(): string {
  *   "КП-2026-001".
  * - The fallback is used only when the collection is empty.
  */
-async function getNextKpNumber(ownerId: string): Promise<string> {
+async function getExistingMaxKpSerial(ownerId: string): Promise<number> {
   const client = MiniBaseServerClient.fromEnvironment();
   const collection = collectionFor(ownerId);
-  const prefix = getTodayPrefix();
-  const regex = new RegExp(`^${prefix}-(\\d+)$`);
+  const prefix = `${getTodayPrefix()}-`;
+  const regex = new RegExp(`^${prefix}(\\d+)$`);
   let maxSerial = 0;
 
   let after: string | undefined;
@@ -84,8 +89,7 @@ async function getNextKpNumber(ownerId: string): Promise<string> {
     after = page.nextAfter ?? undefined;
   } while (after);
 
-  const nextSerial = maxSerial + 1;
-  return `${prefix}-${String(nextSerial).padStart(3, "0")}`;
+  return maxSerial;
 }
 
 export async function listProposals(ownerId: string): Promise<Kp[]> {
@@ -116,11 +120,11 @@ export async function createProposal(ownerId: string, input: KpFormData): Promis
   const publicToken = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  const number = input.number?.trim() || (await getNextKpNumber(ownerId));
+  const suppliedNumber = input.number?.trim();
 
   const data: StoredKp = {
     owner_id: ownerId,
-    number,
+    number: suppliedNumber || "",
     client_id: input.client_id ?? null,
     client_name: input.client_name,
     client_phone: input.client_phone ?? null,
@@ -139,8 +143,23 @@ export async function createProposal(ownerId: string, input: KpFormData): Promis
     current_revision: 1,
   };
 
-  await MiniBaseServerClient.fromEnvironment().put(collectionFor(ownerId), id, data);
-  return toKp({ id, data, createdAt: now, updatedAt: now });
+  const client = MiniBaseServerClient.fromEnvironment();
+  if (suppliedNumber) {
+    await client.put(collectionFor(ownerId), id, data);
+    return toKp({ id, data, createdAt: now, updatedAt: now });
+  }
+
+  const year = new Date(now).getFullYear();
+  await client.allocateSeededSequence({
+    counter: { collection: counterCollectionFor(ownerId), id: `kp-${year}` },
+    record: { collection: collectionFor(ownerId), id, data },
+    sequenceField: "number",
+    prefix: `${getTodayPrefix()}-`,
+    minimumDigits: 3,
+    initialValue: await getExistingMaxKpSerial(ownerId),
+  }, id);
+  const created = await client.get<StoredKp>(collectionFor(ownerId), id);
+  return toKp(created);
 }
 
 export async function deleteProposal(id: string, ownerId: string): Promise<boolean> {
